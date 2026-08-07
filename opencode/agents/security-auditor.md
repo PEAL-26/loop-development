@@ -6,10 +6,7 @@ model: opencode/big-pickle
 temperature: 0.1
 permission:
   edit: deny
-  bash:
-    "npm audit*": allow
-    "pip-audit*": allow
-    "*": ask
+  bash: allow
   webfetch: allow
 ---
 

@@ -1,7 +1,8 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { AGENT_NAME } from "./constants.js";
 
-export const AGENT_NAME = "loop-development";
+export { AGENT_NAME };
 
 export function resolveConfigDir(explicit) {
   if (explicit) return explicit;

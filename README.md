@@ -23,7 +23,9 @@ Instala em `~/.config/opencode/`:
 - `commands/` — os comandos `/loop-development`, `/loop-development-continue` e `/loop-development-status`;
 - `scripts/` — o `set-model.sh` (alternativa em bash ao subcomando `set-model`);
 - `templates/` — o esqueleto de estado persistente para novos projetos;
-- mescla no `opencode.json` (ou `opencode.jsonc`) existente as permissões de `task` do agente `loop-development`, **sem sobrescrever** nada do que já tens — com backup em `opencode.json.bak-loop-development`.
+- mescla no `opencode.json` (ou `opencode.jsonc`) existente as permissões do agente `loop-development` (`task` + `read`/`edit`/`glob` em `allow` para `.loop-development/**`, também nos subagentes internos) — com backup em `opencode.json.bak-loop-development`. Os valores geridos são **sobrepostos** se já existirem (ex: `bash: "ask"` passa a `"allow"`), preservando as restantes customizações; nada que o Loop Development não gere é tocado.
+- garante `bash: "allow"` nos **agentes de execução** (implementer, refactorer, test-writer, verifier, dependency-auditor, security-auditor, performance-auditor) para que npm/pnpm/etc. não peçam permissão durante a implementação;
+- **remove entradas stale** de agentes que o Loop Development já não instala como ficheiros (`implementer`, `verifier`, `loop-triage` em versões antigas), após backup, para não reativarem permissões antigas.
 
 Repetir o comando é seguro (idempotente). Reinicia o OpenCode depois de instalar.
 
@@ -45,23 +47,48 @@ npx loop-development init --project
 Cria no diretório atual (ou no caminho indicado: `init --project <dir>`):
 
 - `.loop-development/` — esqueleto do estado persistente;
-- `AGENTS.md` — a partir do template.
+- `AGENTS.md` — gerado a partir dos presets de stack que escolheres (ou do template, se escolheres "manual").
 
-Depois **edita o `AGENTS.md`** com a stack, comandos reais (testes/lint/typecheck/build) e convenções desse projeto específico — é isto que dá ao Verifier e ao Test Writer comandos reais em vez de adivinhados. Também podes deixar o próprio Intake criar a pasta `.loop-development/` automaticamente na primeira invocação, se preferires não correr o `init --project`.
+O comando abre um **wizard interativo** (escolhe backend → frontend → gestor de pacotes). Para não-interativo (CI/scripts):
+
+```bash
+npx loop-development init --project --backend nestjs-prisma --frontend expo --pm pnpm
+```
+
+```bash
+npx loop-development --list-presets   # lista os presets disponíveis
+```
+
+Presets incluídos (alinhados com convenções de mercado — fonte: docs oficiais de cada stack):
+
+| Tipo | id | Stack |
+|---|---|---|
+| Backend | `nestjs-prisma` | NestJS 11 + Prisma 7 + PostgreSQL |
+| Backend | `nestjs-supabase` | NestJS 11 + Supabase (RLS/Auth/Storage) |
+| Backend | `express` | Node.js + Express 5 + TypeScript |
+| Backend | `fastify` | Fastify 5 + TypeScript |
+| Frontend | `expo` | Expo SDK 55 (React Native) + Expo Router |
+| Frontend | `next` | Next.js 16 (App Router) + Tailwind |
+| Frontend | `vite` | React + Vite + TypeScript |
+
+O gestor de pacotes (`npm`/`pnpm`/`yarn`/`bun`) é **detetado** no projeto (lockfiles ou campo `packageManager`); se não houver sinais, o wizard pergunta. O `AGENTS.md` gerado preenche as 5 secções (Stack, Convenções, Comandos, Estrutura, O que nunca fazer) com comandos reais por gestor — revisa e ajusta se o teu projeto for diferente.
+
+Depois **revisa o `AGENTS.md`** — é isto que dá ao Verifier e ao Test Writer comandos reais em vez de adivinhados. Também podes deixar o próprio Intake criar a pasta `.loop-development/` automaticamente na primeira invocação, se preferires não correr o `init --project`.
 
 ## Subcomandos do CLI
 
 | Comando | Descrição |
 |---|---|
 | `loop-development init` | Instala agentes/comandos globalmente (idempotente). |
-| `loop-development init --project [dir]` | Prepara um projeto (`.loop-development/` + `AGENTS.md`). |
+| `loop-development init --project [dir]` | Prepara um projeto (`.loop-development/` + `AGENTS.md`) — wizard de presets ou `--backend/--frontend/--pm`. |
 | `loop-development update` | Re-sincroniza a partir do pacote. |
 | `loop-development uninstall` | Remove apenas o que foi instalado pelo Loop Development (usa o manifesto). |
 | `loop-development status` | Mostra o estado da instalação e do projeto atual. |
 | `loop-development set-model <tier> <modelo>` | Troca o modelo de todos os agentes de uma camada. |
+| `loop-development --list-presets` | Lista os presets de stack disponíveis. |
 | `loop-development --version` / `--help` | Versão / ajuda. |
 
-Opções comuns: `--yes` (não confirmar), `--force` (sobrescrever existentes), `--dry-run` (mostrar sem alterar), `--config-dir <dir>`.
+Opções comuns: `--yes` (não confirmar), `--force` (sobrescrever existentes), `--dry-run` (mostrar sem alterar), `--config-dir <dir>`. No `init --project`: `--backend <id>`, `--frontend <id>`, `--pm <npm|pnpm|yarn|bun>` (tornam o fluxo não-interativo).
 
 ## Como usar
 
@@ -124,6 +151,10 @@ npx loop-development set-model execution opencode/minimax-m2.5-free
 ## Autonomia e permissões
 
 Dentro do ciclo de um ticket (implementação, testes, lint, prettier), os subagents têm `edit`/`bash` em `allow`, o loop não para para pedir permissão em cada passo. As únicas paragens manuais garantidas são a aprovação do **plano** e da **lista de tickets**.
+
+**Pasta `.loop-development/` pré-autorizada:** a instalação adiciona `read`/`edit`/`glob` em `allow` para o padrão `.loop-development/**` no agente `loop-development` e nos subagentes internos (context-loader, state-manager, planner-writer, ticket-generator, compacter, refactorer, documentation-writer, final-reviewer). Assim, o fluxo lê e atualiza o estado sem pedir permissão na primeira execução. Se já tiveres `read`/`edit` com `"ask"` nesses agentes, a regra é mesclada (`{ "*": "ask", ".loop-development/**": "allow" }`) — a tua configuração não é sobrescrita. Tudo o resto do projeto segue a tua configuração.
+
+**Agentes de execução com `bash: allow`:** os agentes que executam código (implementer, refactorer, test-writer, verifier, dependency-auditor, security-auditor, performance-auditor) recebem `bash: "allow"` no `opencode.json` para que comandos de pacotes (npm, pnpm, yarn, bun) e de testes corram sem pedir permissão. Se já tinham `bash: "ask"` (ou um mapa de regras antigo), o valor é **sobreposto** — as restantes chaves desses agentes ficam intactas. Para reverter, muda para `ask` no ficheiro do agente em `~/.config/opencode/agents/` e corre `npx loop-development update` para o installer não voltar a sobrepor.
 
 O `git-manager` só tem `allow` em comandos `git` de leitura, `add` e `commit`; `push`, `checkout`, `branch`, `merge`, `rebase` e `reset` ficam sempre em `ask`.
 

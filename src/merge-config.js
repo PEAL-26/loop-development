@@ -1,9 +1,16 @@
 import { readFile, writeFile, rename, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
-import { AGENT_NAME } from "./config-dir.js";
+import { AGENT_NAME, INTERNAL_AGENTS, PERMISSION_KEYS, EXECUTION_AGENTS, STALE_AGENT_KEYS } from "./constants.js";
 
-export const MANAGED_KEYS = [`agent.${AGENT_NAME}.permission.task`];
+export const MANAGED_KEYS = [
+  `agent.${AGENT_NAME}.permission.task`,
+  ...PERMISSION_KEYS.map((k) => `agent.${AGENT_NAME}.permission.${k}`),
+  ...INTERNAL_AGENTS.flatMap((name) =>
+    PERMISSION_KEYS.map((k) => `agent.${name}.permission.${k}`)
+  ),
+  ...EXECUTION_AGENTS.flatMap((name) => [`agent.${name}.permission.bash`])
+];
 
 export function stripJsonc(text) {
   const kept = [];
@@ -87,23 +94,68 @@ export function removeEntry(config, path, key) {
 
 export function mergeManaged(config, baseConfig) {
   const added = [];
+  const managed = [];
   for (const key of MANAGED_KEYS) {
     const baseValue = getPath(baseConfig, key);
-    if (baseValue == null || typeof baseValue !== "object") continue;
-    const existing = getPath(config, key);
-    if (existing != null && typeof existing === "object") {
+    if (baseValue == null) continue;
+
+    if (typeof baseValue === "object") {
+      const existing = getPath(config, key);
+      let target;
+      if (existing != null && typeof existing === "object") {
+        target = existing;
+      } else if (existing != null) {
+        target = { "*": existing };
+        setPath(config, key, target);
+        added.push({ path: key, key: "*" });
+      } else {
+        target = {};
+        setPath(config, key, target);
+      }
+
       for (const [k, v] of Object.entries(baseValue)) {
-        if (!(k in existing)) {
-          existing[k] = v;
+        if (!(k in target)) {
+          target[k] = v;
           added.push({ path: key, key: k });
+        } else if (target[k] !== v) {
+          const previous = target[k];
+          target[k] = v;
+          managed.push({ path: key, key: k, previous });
         }
       }
     } else {
-      setPath(config, key, { ...baseValue });
-      for (const [k, v] of Object.entries(baseValue)) added.push({ path: key, key: k });
+      const existing = getPath(config, key);
+      if (existing === undefined) {
+        setPath(config, key, baseValue);
+        added.push(splitLeaf(key));
+      } else if (existing !== baseValue) {
+        setPath(config, key, baseValue);
+        managed.push({ ...splitLeaf(key), previous: existing });
+      }
     }
   }
-  return { config, added };
+  return { config, added, managed };
+}
+
+function splitLeaf(key) {
+  const i = key.lastIndexOf(".");
+  return { path: key.slice(0, i), key: key.slice(i + 1) };
+}
+
+const STALE_SIGNATURE_KEYS = ["name", "description", "mode", "prompt"];
+
+export function removeStaleAgents(config) {
+  const removed = [];
+  for (const name of STALE_AGENT_KEYS) {
+    const entry = getPath(config, `agent.${name}`);
+    if (entry == null || typeof entry !== "object") continue;
+    const isStale = STALE_SIGNATURE_KEYS.some((k) => k in entry);
+    if (isStale) {
+      removeEntry(config, "agent", name);
+      removed.push(`agent.${name}`);
+    }
+  }
+  return removed;
 }
 
 export async function mergeConfigFile(configDir, baseConfig, { dryRun = false } = {}) {
@@ -120,11 +172,12 @@ export async function mergeConfigFile(configDir, baseConfig, { dryRun = false } 
     }
   }
 
-  const { config: merged, added } = mergeManaged(config, baseConfig);
-  const changed = added.length > 0;
+  const removed = removeStaleAgents(config);
+  const { config: merged, added, managed } = mergeManaged(config, baseConfig);
+  const changed = added.length > 0 || managed.length > 0 || removed.length > 0;
 
   if (!changed || dryRun) {
-    return { file, changed, backup: null, added };
+    return { file, changed, backup: null, added, managed, removed };
   }
 
   let backup = null;
@@ -134,7 +187,7 @@ export async function mergeConfigFile(configDir, baseConfig, { dryRun = false } 
   }
   await writeFile(file, serializeConfig(merged), "utf8");
 
-  return { file, changed: true, backup, added };
+  return { file, changed: true, backup, added, managed, removed };
 }
 
 function backupPath(file) {

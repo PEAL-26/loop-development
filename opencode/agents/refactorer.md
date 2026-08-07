@@ -1,7 +1,7 @@
 ---
 description: Elimina código morto, duplicação e complexidade desnecessária no que foi implementado, melhorando legibilidade sem alterar comportamento.
 mode: subagent
-model: opencode/minimax-m2.5-free
+model: opencode/big-pickle
 # tier: execution
 temperature: 0.1
 permission:

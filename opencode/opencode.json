@@ -25,7 +25,97 @@
           "state-manager": "allow",
           "compacter": "allow",
           "final-reviewer": "allow"
-        }
+        },
+        "read": { ".loop-development/**": "allow" },
+        "edit": { ".loop-development/**": "allow" },
+        "glob": { ".loop-development/**": "allow" }
+      }
+    },
+    "context-loader": {
+      "permission": {
+        "read": { ".loop-development/**": "allow" },
+        "edit": { ".loop-development/**": "allow" },
+        "glob": { ".loop-development/**": "allow" }
+      }
+    },
+    "state-manager": {
+      "permission": {
+        "read": { ".loop-development/**": "allow" },
+        "edit": { ".loop-development/**": "allow" },
+        "glob": { ".loop-development/**": "allow" }
+      }
+    },
+    "planner-writer": {
+      "permission": {
+        "read": { ".loop-development/**": "allow" },
+        "edit": { ".loop-development/**": "allow" },
+        "glob": { ".loop-development/**": "allow" }
+      }
+    },
+    "ticket-generator": {
+      "permission": {
+        "read": { ".loop-development/**": "allow" },
+        "edit": { ".loop-development/**": "allow" },
+        "glob": { ".loop-development/**": "allow" }
+      }
+    },
+    "compacter": {
+      "permission": {
+        "read": { ".loop-development/**": "allow" },
+        "edit": { ".loop-development/**": "allow" },
+        "glob": { ".loop-development/**": "allow" }
+      }
+    },
+    "refactorer": {
+      "permission": {
+        "read": { ".loop-development/**": "allow" },
+        "edit": { ".loop-development/**": "allow" },
+        "glob": { ".loop-development/**": "allow" },
+        "bash": "allow"
+      }
+    },
+    "implementer": {
+      "permission": {
+        "bash": "allow"
+      }
+    },
+    "test-writer": {
+      "permission": {
+        "bash": "allow"
+      }
+    },
+    "verifier": {
+      "permission": {
+        "bash": "allow"
+      }
+    },
+    "dependency-auditor": {
+      "permission": {
+        "bash": "allow"
+      }
+    },
+    "security-auditor": {
+      "permission": {
+        "bash": "allow"
+      }
+    },
+    "performance-auditor": {
+      "permission": {
+        "bash": "allow"
+      }
+    },
+    "documentation-writer": {
+      "permission": {
+        "read": { ".loop-development/**": "allow" },
+        "edit": { ".loop-development/**": "allow" },
+        "glob": { ".loop-development/**": "allow" }
+      }
+    },
+    "final-reviewer": {
+      "permission": {
+        "read": { ".loop-development/**": "allow" },
+        "edit": { ".loop-development/**": "allow" },
+        "glob": { ".loop-development/**": "allow" }
       }
     }
   }

@@ -9,7 +9,9 @@ export function emptyManifest() {
     installedAt: null,
     files: [],
     configFile: null,
-    configAdded: []
+    configAdded: [],
+    configManaged: [],
+    configRemoved: []
   };
 }
 

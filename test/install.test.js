@@ -33,6 +33,17 @@ test("installGlobal copia assets, mescla config e grava manifesto", async () => 
   assert.equal(getPath(config, "agent.loop-development.permission.task.grill-me"), "allow");
   assert.equal(getPath(config, "agent.loop-development.permission.task.*"), "deny");
 
+  const mainRead = getPath(config, "agent.loop-development.permission.read");
+  assert.equal(mainRead[".loop-development/**"], "allow");
+  assert.equal(getPath(config, "agent.loop-development.permission.edit")[".loop-development/**"], "allow");
+  assert.equal(getPath(config, "agent.loop-development.permission.glob")[".loop-development/**"], "allow");
+  assert.equal(getPath(config, "agent.state-manager.permission.read")[".loop-development/**"], "allow");
+  assert.equal(getPath(config, "agent.context-loader.permission.edit")[".loop-development/**"], "allow");
+
+  for (const name of ["implementer", "refactorer", "test-writer", "verifier", "dependency-auditor", "security-auditor", "performance-auditor"]) {
+    assert.equal(getPath(config, `agent.${name}.permission.bash`), "allow", `${name} deve ter bash allow`);
+  }
+
   const manifest = await loadManifest(dir);
   assert.ok(manifest.files.length > 0);
   assert.ok(manifest.configAdded.length > 0);
@@ -82,6 +93,38 @@ test("installGlobal --dry-run não escreve nada", async () => {
   assert.ok(!existsSync(join(dir, "opencode.json")));
 });
 
+test("installGlobal remove entries stale do config e registra configRemoved", async () => {
+  const dir = tempDir();
+  writeFileSync(
+    join(dir, "opencode.json"),
+    JSON.stringify({ agent: { implementer: { name: "implementer", description: "L2", mode: "subagent", prompt: "x", permission: { bash: "ask" } } } }),
+    "utf8"
+  );
+
+  const result = await installGlobal({ configDir: dir });
+
+  assert.ok(result.configRemoved.includes("agent.implementer"));
+  const config = parseConfig(readFileSync(join(dir, "opencode.json"), "utf8"));
+  assert.equal(getPath(config, "agent.implementer.name"), undefined);
+  assert.equal(getPath(config, "agent.implementer.permission.bash"), "allow");
+  const manifest = await loadManifest(dir);
+  assert.ok(manifest.configRemoved.includes("agent.implementer"));
+  assert.ok(existsSync(join(dir, "opencode.json.bak-loop-development")));
+});
+
+test("installGlobal com entry stale é idempotente", async () => {
+  const dir = tempDir();
+  writeFileSync(
+    join(dir, "opencode.json"),
+    JSON.stringify({ agent: { implementer: { name: "implementer", mode: "subagent", prompt: "x", permission: { bash: "ask" } } } }),
+    "utf8"
+  );
+  await installGlobal({ configDir: dir });
+  const result = await installGlobal({ configDir: dir });
+  assert.equal(result.merged, false);
+  assert.equal(result.configRemoved.length, 0);
+});
+
 test("uninstall remove só o que foi instalado e preserva o resto", async () => {
   const dir = tempDir();
   mkdirSync(join(dir, "agents"), { recursive: true });
@@ -128,4 +171,22 @@ test("installProject é idempotente", async () => {
   const result = await installProject({ targetDir: dir });
   assert.equal(result.copied, 0);
   assert.equal(result.existed > 0, true);
+});
+
+test("installProject com presets gera AGENTS.md preenchido", async () => {
+  const dir = tempDir();
+  const result = await installProject({ targetDir: dir, backend: "nestjs-prisma", frontend: "expo", pm: "pnpm" });
+  assert.equal(result.presets, true);
+  const agents = readFileSync(join(dir, "AGENTS.md"), "utf8");
+  assert.match(agents, /## Stack/);
+  assert.match(agents, /## Comandos do projeto/);
+  assert.match(agents, /NestJS 11 \(Express\) \+ Prisma 7/);
+  assert.match(agents, /Expo SDK 55/);
+  assert.match(agents, /- Dev \(backend\): pnpm start:dev/);
+  assert.ok(existsSync(join(dir, ".loop-development", "state.json")));
+  assert.ok(!existsSync(join(dir, "AGENTS.md.template")));
+});
+
+test("installProject rejeita preset desconhecido", async () => {
+  await assert.rejects(() => installProject({ targetDir: tempDir(), backend: "x" }), /Preset de backend desconhecido: x/);
 });

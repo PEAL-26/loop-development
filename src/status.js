@@ -23,7 +23,10 @@ export async function getStatus({ configDir } = {}) {
     try {
       const config = parseConfig(await readFile(configFile, "utf8"));
       const task = getPath(config, "agent.loop-development.permission.task");
-      configEntries = task ? Object.keys(task).length : 0;
+      const hasManaged = (manifest.configAdded?.length ?? 0) + (manifest.configManaged?.length ?? 0) > 0;
+      configEntries = hasManaged
+        ? (manifest.configAdded?.length ?? 0) + (manifest.configManaged?.length ?? 0)
+        : task ? Object.keys(task).length : 0;
     } catch {
       configEntries = "erro de leitura";
     }
@@ -40,7 +43,7 @@ export async function getStatus({ configDir } = {}) {
     }
   }
 
-  return { configDir: dir, packageVersion: pkg.version, installedVersion: manifest.version, agents, commands, configEntries, projectPhase, manifestExists: (manifest.files?.length ?? 0) > 0 };
+  return { configDir: dir, packageVersion: pkg.version, installedVersion: manifest.version, agents, commands, configEntries, configRemoved: manifest.configRemoved ?? [], projectPhase, manifestExists: (manifest.files?.length ?? 0) > 0 };
 }
 
 export async function status(opts) {
@@ -51,7 +54,9 @@ export async function status(opts) {
   if (data.manifestExists) {
     lines.push(`Agentes instalados: ${data.agents}`);
     lines.push(`Comandos instalados: ${data.commands}`);
-    lines.push(`Entradas no config: ${data.configEntries === null ? "nenhuma" : data.configEntries + " permissões de task"}`);
+    lines.push(`Entradas geridas no config: ${data.configEntries === null ? "nenhuma" : data.configEntries}`);
+    const removed = data.configRemoved?.length ?? 0;
+    if (removed > 0) lines.push(`Entries stale removidos: ${removed}`);
   } else {
     lines.push("Agentes instalados: nenhum (corre 'npx loop-development init')");
   }

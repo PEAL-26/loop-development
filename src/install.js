@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { resolveConfigDir } from "./config-dir.js";
 import { mergeConfigFile } from "./merge-config.js";
 import { loadManifest, saveManifest } from "./manifest.js";
+import { buildAgentsMd, findPreset } from "./presets.js";
 
 export const PKG_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 export const ASSETS_DIR = join(PKG_ROOT, "opencode");
@@ -29,6 +30,13 @@ async function copyFileIfNeeded(src, dst, force) {
   if (!force && existsSync(dst)) return "exists";
   await mkdir(dirname(dst), { recursive: true });
   await cp(src, dst);
+  return "copied";
+}
+
+async function writeFileIfNeeded(dst, content, force) {
+  if (!force && existsSync(dst)) return "exists";
+  await mkdir(dirname(dst), { recursive: true });
+  await writeFile(dst, content, "utf8");
   return "copied";
 }
 
@@ -85,6 +93,14 @@ export async function installGlobal({ configDir, force = false, dryRun = false, 
     configAdded: uniqueBy(
       [...(manifest.configAdded ?? []), ...mergeResult.added],
       (a) => `${a.path}.${a.key}`
+    ),
+    configManaged: uniqueBy(
+      [...(manifest.configManaged ?? []), ...mergeResult.managed],
+      (a) => `${a.path}.${a.key}`
+    ),
+    configRemoved: uniqueBy(
+      [...(manifest.configRemoved ?? []), ...mergeResult.removed],
+      (a) => a
     )
   };
 
@@ -95,23 +111,41 @@ export async function installGlobal({ configDir, force = false, dryRun = false, 
   log("Reinicia o OpenCode para que os agentes e comandos fiquem disponíveis.");
   if (dryRun) log("(--dry-run: nada foi alterado)");
 
-  return { configDir: dir, copied: results.copied, existed: results.existed, merged: mergeResult.changed, manifest: updatedManifest };
+  return { configDir: dir, copied: results.copied, existed: results.existed, merged: mergeResult.changed, configRemoved: mergeResult.removed, manifest: updatedManifest };
 }
 
-export async function installProject({ targetDir = process.cwd(), force = false, dryRun = false, log = () => {} } = {}) {
+export async function installProject({ targetDir = process.cwd(), force = false, dryRun = false, log = () => {}, backend = null, frontend = null, pm = null } = {}) {
   await mkdir(targetDir, { recursive: true });
   const templatesDir = join(ASSETS_DIR, "templates");
   const results = { copied: 0, existed: 0 };
 
+  const withPresets = Boolean(backend || frontend);
+  if (backend && !findPreset("backend", backend)) throw new Error(`Preset de backend desconhecido: ${backend}`);
+  if (frontend && !findPreset("frontend", frontend)) throw new Error(`Preset de frontend desconhecido: ${frontend}`);
+
+  const agentsContent = withPresets
+    ? buildAgentsMd({ backend, frontend, pm })
+    : await readFile(join(templatesDir, "AGENTS.md.template"), "utf8");
+
+  const agentsStatus = dryRun
+    ? !force && existsSync(join(targetDir, "AGENTS.md")) ? "exists" : "copied"
+    : await writeFileIfNeeded(join(targetDir, "AGENTS.md"), agentsContent, force);
+  if (agentsStatus === "copied") {
+    results.copied += 1;
+    log(`criado: AGENTS.md${withPresets ? ` (presets: ${[backend, frontend].filter(Boolean).join(" + ")})` : ""}`);
+  } else {
+    results.existed += 1;
+  }
+
   for (const rel of await walk(templatesDir)) {
-    const dstRel = rel === "AGENTS.md.template" ? "AGENTS.md" : rel;
-    const dst = join(targetDir, dstRel);
+    if (rel === "AGENTS.md.template") continue;
+    const dst = join(targetDir, rel);
     const status = dryRun
       ? !force && existsSync(dst) ? "exists" : "copied"
       : await copyFileIfNeeded(join(templatesDir, rel), dst, force);
     if (status === "copied") {
       results.copied += 1;
-      log(`criado: ${dstRel}`);
+      log(`criado: ${rel}`);
     } else {
       results.existed += 1;
     }
@@ -119,8 +153,12 @@ export async function installProject({ targetDir = process.cwd(), force = false,
 
   log(`\nProjeto preparado em ${targetDir}`);
   log(`Arquivos: ${results.copied} criados, ${results.existed} já existiam`);
-  log("Edita o AGENTS.md com a stack, comandos reais (testes/lint/typecheck/build) e convenções do projeto.");
+  if (withPresets) {
+    log("AGENTS.md gerado a partir dos presets — revisa as secções e ajusta comandos reais se necessário.");
+  } else {
+    log("Edita o AGENTS.md com a stack, comandos reais (testes/lint/typecheck/build) e convenções do projeto.");
+  }
   log("Para o estado persistente ser usado, garante que .loop-development/ existe na raiz do projeto.");
 
-  return { targetDir, copied: results.copied, existed: results.existed };
+  return { targetDir, copied: results.copied, existed: results.existed, presets: withPresets };
 }

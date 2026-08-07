@@ -1,7 +1,7 @@
 ---
 description: Atualiza README, CHANGELOG, documentação de API e ADRs relevantes ao ticket concluído.
 mode: subagent
-model: opencode/minimax-m2.5-free
+model: opencode/big-pickle
 # tier: execution
 temperature: 0.2
 permission:

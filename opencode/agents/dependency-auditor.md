@@ -6,13 +6,7 @@ model: opencode/deepseek-v4-flash-free
 temperature: 0.1
 permission:
   edit: deny
-  bash:
-    "npm view *": allow
-    "npm outdated*": allow
-    "npm ls*": allow
-    "pip show *": allow
-    "pip index versions *": allow
-    "*": ask
+  bash: allow
   webfetch: allow
 ---
 
