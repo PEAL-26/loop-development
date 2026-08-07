@@ -1,7 +1,7 @@
 ---
 description: Documenta formalmente o plano aprovado e os tickets gerados nos ficheiros persistentes do projeto (.loop-development/roadmap.md, .loop-development/architecture.md, .loop-development/tickets/*.md).
 mode: subagent
-model: opencode/big-pickle
+model: opencode/mimo-v2.5-free
 # tier: execution
 temperature: 0.1
 permission:

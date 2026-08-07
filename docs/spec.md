@@ -30,7 +30,7 @@ Criar um agente orquestrador capaz de conduzir todo o ciclo de desenvolvimento d
 ## Fluxo
 
 1. Recebe o pedido.
-2. Grill-Me identifica ambiguidades.
+2. Grill-Me identifica ambiguidades, fazendo **uma pergunta de cada vez** e adaptando as perguntas seguintes às respostas do utilizador.
 3. Researcher consulta documentação oficial.
 4. Planner cria o plano.
 5. Architecture Reviewer valida a arquitetura.

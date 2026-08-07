@@ -1,7 +1,7 @@
 ---
 description: Configura a infraestrutura de testes do projeto se ainda não existir, e escreve os testes do ticket atual, respeitando a cobertura mínima definida em .loop-development/state.json.
 mode: subagent
-model: opencode/big-pickle
+model: opencode/mimo-v2.5-free
 # tier: execution
 temperature: 0.15
 permission:

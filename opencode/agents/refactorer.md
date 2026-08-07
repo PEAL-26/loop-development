@@ -1,7 +1,7 @@
 ---
 description: Elimina código morto, duplicação e complexidade desnecessária no que foi implementado, melhorando legibilidade sem alterar comportamento.
 mode: subagent
-model: opencode/big-pickle
+model: opencode/mimo-v2.5-free
 # tier: execution
 temperature: 0.1
 permission:

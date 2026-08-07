@@ -1,7 +1,7 @@
 ---
 description: Atualiza README, CHANGELOG, documentação de API e ADRs relevantes ao ticket concluído.
 mode: subagent
-model: opencode/big-pickle
+model: opencode/mimo-v2.5-free
 # tier: execution
 temperature: 0.2
 permission:

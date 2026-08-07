@@ -3,7 +3,7 @@
 #
 # Uso:
 #   ./scripts/set-model.sh reasoning anthropic/claude-opus-4-8
-#   ./scripts/set-model.sh execution opencode/minimax-m2.5-free
+#   ./scripts/set-model.sh execution opencode/mimo-v2.5-free
 #   ./scripts/set-model.sh mechanical opencode/deepseek-v4-flash-free
 #
 # Tiers existentes: reasoning, execution, mechanical

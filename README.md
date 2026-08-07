@@ -95,7 +95,7 @@ Opções comuns: `--yes` (não confirmar), `--force` (sobrescrever existentes), 
 **Opção A, comando direto (recomendado para arrancar um projeto novo):**
 
 ```
-/loop-development Quero construir um SaaS de gestão de anúncios para PMEs angolanas, com login, dashboard de campanhas e integração com a Facebook Ads API.
+/loop-development Cria uma todo list web em React + Vite + Tailwind: adicionar, concluir, editar e remover tarefas, filtros (todas/ativas/concluídas), persistência em localStorage, tema claro/escuro e design limpo e responsivo.
 ```
 
 **Opção B, agente primário (Tab):**
@@ -119,13 +119,15 @@ Lê `.loop-development/state.json` e continua exatamente de onde ficou, sem repe
 ## O que esperar do fluxo
 
 1. Intake regista o pedido e garante que `.loop-development/` existe.
-2. Grill-Me faz perguntas de clarificação (se houver ambiguidades), respondes tu.
+2. Grill-Me faz perguntas de clarificação (se houver ambiguidades), **uma pergunta de cada vez** (cada resposta influencia a pergunta seguinte), respondes tu.
 3. Researcher + Planner + Architecture Reviewer produzem um plano.
 4. **Paragem obrigatória:** aprovas o plano.
 5. Ticket Generator divide o plano em tickets.
 6. **Paragem obrigatória:** aprovas a lista de tickets.
 7. A partir daqui, o loop corre **sozinho**, ticket a ticket: implementa, refatora, escreve testes, corre verificações (testes/typecheck/lint/prettier/segurança/performance), corrige até tudo passar, documenta, faz commit, persiste estado, sem te voltar a interromper entre tickets, a não ser que surja uma ambiguidade genuína fora do que foi aprovado.
 8. No fim, Final Reviewer faz uma revisão global e o Loop Development reporta um resumo final.
+
+> **Sobre o Grill-Me:** no fluxo, o `grill-me` executado é o **agente do pacote**, invocado pelo orquestrador via Task (e também acessível com `@grill-me`). É independente de qualquer skill do utilizador com o mesmo nome — o agente tem acesso à tool `skill` negado, pelo que as instruções dele vêm sempre do pacote, não de skills instaladas (ex: `~/.agents/skills/grill-me/`).
 
 ## Modelos e camadas (tiers)
 
@@ -134,16 +136,18 @@ Por defeito usa modelos **gratuitos** do OpenCode Zen, agrupados em 3 camadas, c
 | Tier | Agentes | Modelo default |
 |---|---|---|
 | `reasoning` | loop-development, grill-me, researcher, planner, architecture-reviewer, security-auditor, performance-auditor, final-reviewer | `opencode/big-pickle` |
-| `execution` | planner-writer, ticket-generator, implementer, refactorer, test-writer, documentation-writer | `opencode/minimax-m2.5-free` |
+| `execution` | planner-writer, ticket-generator, implementer, refactorer, test-writer, documentation-writer | `opencode/mimo-v2.5-free` |
 | `mechanical` | intake, dependency-auditor, context-loader, verifier, git-manager, state-manager, compacter | `opencode/deepseek-v4-flash-free` |
 
 **Importante:** os modelos gratuitos do OpenCode Zen rodam com frequência (promoções que terminam, modelos que saem/entram). Antes de confiar nestes IDs, corre `/models` no OpenCode para confirmares o que está disponível como gratuito neste momento. Se algum destes IDs já não existir, troca-o.
+
+Nota: o antigo `opencode/minimax-m2.5-free` foi removido do Zen; o sucessor gratuito equivalente é o `opencode/mimo-v2.5-free` (família Xiaomi/MiniMax).
 
 Para trocar o modelo de uma camada inteira de uma só vez:
 
 ```bash
 npx loop-development set-model reasoning anthropic/claude-opus-4-8
-npx loop-development set-model execution opencode/minimax-m2.5-free
+npx loop-development set-model execution opencode/mimo-v2.5-free
 ```
 
 (Em bash, o wrapper `~/.config/opencode/scripts/set-model.sh reasoning anthropic/claude-opus-4-8` continua a funcionar.)
@@ -169,7 +173,9 @@ npm pack --dry-run  # mostra o conteúdo que seria publicado
 
 ### Publicação
 
-O pacote é publicado via GitHub Actions + `semantic-release` no branch `main`, com commits em conventional commits. Precisa de um repositório GitHub e de um `NPM_TOKEN` de automação (repo secrets).
+O pacote é publicado via GitHub Actions + `semantic-release` no branch `main`, com commits em conventional commits. Precisa de um repositório GitHub e de um `NPM_TOKEN` de automação, guardado no environment **"Production"** do repositório — o job `release` declara `environment: production`, que é o que torna o secret visível ao workflow (secrets de um environment só são expostos a jobs que o referenciam). Se a env tiver *required reviewers*, cada release fica a aguardar aprovação manual.
+
+A **versão é atualizada automaticamente** (`.releaserc.json`): em cada release o semantic-release committa a versão nova em `package.json`/`package-lock.json`, gera `CHANGELOG.md`, e cria o tag/Release no GitHub. A primeira release será `1.0.0`.
 
 Publicação manual, se necessário:
 

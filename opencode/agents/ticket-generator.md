@@ -1,7 +1,7 @@
 ---
 description: Divide um plano aprovado em tickets pequenos, sequenciados, com critérios de aceitação objetivos e dependências explícitas entre si.
 mode: subagent
-model: opencode/big-pickle
+model: opencode/mimo-v2.5-free
 # tier: execution
 temperature: 0.2
 permission:

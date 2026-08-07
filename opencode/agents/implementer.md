@@ -1,7 +1,7 @@
 ---
 description: Implementa o ticket atual seguindo o plano aprovado, a arquitetura definida e o contexto carregado pelo Context Loader.
 mode: subagent
-model: opencode/big-pickle
+model: opencode/mimo-v2.5-free
 # tier: execution
 temperature: 0.15
 permission:
