@@ -1,0 +1,9 @@
+{
+  "phase": "intake",
+  "current_ticket": null,
+  "tickets_done": [],
+  "tickets_pending": [],
+  "min_coverage": 80,
+  "created_at": "",
+  "last_updated": ""
+}

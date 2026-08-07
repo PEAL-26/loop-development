@@ -1,0 +1,28 @@
+# AGENTS.md
+
+Copia este ficheiro para a raiz do projeto onde vais usar o Loop Development, e preenche as secções abaixo. Isto é carregado automaticamente pelo OpenCode em todas as sessões deste projeto e é a principal fonte de "regras da casa" que o Context Loader e todos os subagents devem respeitar.
+
+## Stack
+
+<!-- Ex: Expo (React Native) + Supabase + TypeScript. Gestor de pacotes: pnpm. -->
+
+## Convenções
+
+<!-- Ex: nomes de tabelas e campos de base de dados em inglês; componentes em PascalCase; commits em conventional commits. -->
+
+## Comandos do projeto
+
+<!-- Comandos reais que existem no package.json / equivalente, para o Verifier e o Test Writer usarem em vez de inventarem. -->
+- Testes:
+- Typecheck:
+- Lint:
+- Formatação:
+- Build:
+
+## Estrutura de pastas relevante
+
+<!-- Onde vive o quê, para o Context Loader não ter de adivinhar. -->
+
+## O que nunca fazer
+
+<!-- Ex: nunca alterar ficheiros de migração já aplicados em produção; nunca remover RLS policies no Supabase sem aprovação explícita. -->

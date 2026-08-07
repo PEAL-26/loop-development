@@ -1,0 +1,32 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "loop-development": {
+      "permission": {
+        "task": {
+          "*": "deny",
+          "intake": "allow",
+          "grill-me": "allow",
+          "researcher": "allow",
+          "planner": "allow",
+          "planner-writer": "allow",
+          "architecture-reviewer": "allow",
+          "ticket-generator": "allow",
+          "dependency-auditor": "allow",
+          "context-loader": "allow",
+          "implementer": "allow",
+          "refactorer": "allow",
+          "test-writer": "allow",
+          "verifier": "allow",
+          "security-auditor": "allow",
+          "performance-auditor": "allow",
+          "documentation-writer": "allow",
+          "git-manager": "allow",
+          "state-manager": "allow",
+          "compacter": "allow",
+          "final-reviewer": "allow"
+        }
+      }
+    }
+  }
+}

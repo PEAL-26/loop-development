@@ -1,0 +1,33 @@
+{
+  "name": "loop-development",
+  "version": "0.1.0",
+  "description": "Agente orquestrador global para o OpenCode que conduz todo o ciclo de desenvolvimento de software de forma autónoma",
+  "type": "module",
+  "bin": {
+    "loop-development": "./bin/cli.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "opencode",
+    "docs"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "opencode",
+    "agent",
+    "subagents",
+    "orchestrator",
+    "development-loop",
+    "cli"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "semantic-release": "^24.0.0"
+  }
+}
