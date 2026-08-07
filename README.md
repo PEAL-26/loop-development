@@ -129,29 +129,6 @@ O `git-manager` só tem `allow` em comandos `git` de leitura, `add` e `commit`; 
 
 Se em algum projeto quiseres mais controlo (ex: `edit: ask` também dentro do ciclo), ajusta a `permission` no ficheiro do agente relevante em `~/.config/opencode/agents/`.
 
-## Estrutura deste pacote
-
-```
-package.json                  # bin: loop-development, engines: node >= 18
-bin/cli.js                    # entrada do CLI (ESM, zero dependências)
-src/                          # lógica do instalador (testável)
-  install.js                  #   instalação global e scaffold de projeto
-  merge-config.js             #   merge aditivo do opencode.json (+ backup)
-  manifest.js                 #   manifesto do que foi instalado
-  uninstall.js                #   remoção limpa baseada no manifesto
-  status.js                   #   estado da instalação e do projeto
-  set-model.js                #   troca de modelo por tier (cross-platform)
-  config-dir.js               #   resolução do diretório de config
-opencode/                     # todos os arquivos do agente
-  opencode.json               #   permissões base (mescladas aditivamente)
-  agents/                     #   loop-development.md + 20 subagents
-  commands/                   #   /loop-development, /continue, /status
-  templates/                  #   .loop-development/ + AGENTS.md.template
-  scripts/set-model.sh        #   wrapper bash opcional
-docs/spec.md                  # especificação original
-test/                         # testes (node --test)
-```
-
 ## Desenvolvimento
 
 ```bash
