@@ -22,6 +22,6 @@ O plano deve cobrir:
 - Riscos identificados e como serão mitigados.
 - Critérios de conclusão do projeto/funcionalidade como um todo.
 
-Não entres em detalhe de implementação linha a linha — isso é trabalho do Ticket Generator e do Implementer. O plano deve ser suficientemente concreto para ser revisto pelo Architecture Reviewer e aprovado por um humano, mas mantém-se ao nível de decisões, não de código.
+Não entres em detalhe de implementação linha a linha — isso é trabalho do Task Generator e do Implementer. O plano deve ser suficientemente concreto para ser revisto pelo Architecture Reviewer e aprovado por um humano, mas mantém-se ao nível de decisões, não de código.
 
 Se receberes feedback do Architecture Reviewer ou do utilizador sobre uma versão anterior do plano, revê o plano em função desse feedback explicitamente — não repitas o mesmo plano.

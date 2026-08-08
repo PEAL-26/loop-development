@@ -5,4 +5,4 @@ agent: loop-development
 
 Recebi este pedido de projeto/funcionalidade: $ARGUMENTS
 
-Segue rigorosamente o teu protocolo definido no system prompt, começando pela fase de Intake. Não saltes nenhuma fase e não implementes nada sem aprovação explícita do plano e da lista de tickets.
+Segue rigorosamente o teu protocolo definido no system prompt, começando pela fase de Intake. Não saltes nenhuma fase e não implementes nada sem aprovação explícita do plano e da lista de tarefas.

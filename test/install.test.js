@@ -40,6 +40,12 @@ test("installGlobal copia assets, mescla config e grava manifesto", async () => 
   assert.equal(getPath(config, "agent.state-manager.permission.read")[".loop-development/**"], "allow");
   assert.equal(getPath(config, "agent.context-loader.permission.edit")[".loop-development/**"], "allow");
 
+  for (const name of ["implementer", "test-writer", "git-manager"]) {
+    assert.equal(getPath(config, `agent.${name}.permission.read`)[".loop-development/**"], "allow", `${name} deve ler .loop-development/**`);
+    assert.equal(getPath(config, `agent.${name}.permission.glob`)[".loop-development/**"], "allow", `${name} deve fazer glob de .loop-development/**`);
+    assert.equal(getPath(config, `agent.${name}.permission.edit`), undefined, `${name} não deve ter edit allow em .loop-development/**`);
+  }
+
   for (const name of ["implementer", "refactorer", "test-writer", "verifier", "dependency-auditor", "security-auditor", "performance-auditor"]) {
     assert.equal(getPath(config, `agent.${name}.permission.bash`), "allow", `${name} deve ter bash allow`);
   }

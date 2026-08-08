@@ -1,7 +1,7 @@
 # Loop Development
 
 ## Objetivo
-Criar um agente orquestrador capaz de conduzir todo o ciclo de desenvolvimento de software de forma autónoma, recorrendo a subagents especializados, memória persistente, validação contínua e execução iterativa até à conclusão do projeto.
+Criar um agente orquestrador capaz de conduzir todo o ciclo de desenvolvimento de software de forma autónoma, recorrendo a subagents especializados, memória persistente, validação contínua e execução iterativa até à conclusão do projeto — um plano por funcionalidade.
 
 ## Arquitetura
 
@@ -12,7 +12,7 @@ Criar um agente orquestrador capaz de conduzir todo o ciclo de desenvolvimento d
   - Planner
   - Planner Writer
   - Architecture Reviewer
-  - Ticket Generator
+  - Task Generator
   - Dependency Auditor
   - Context Loader
   - Implementer
@@ -29,72 +29,78 @@ Criar um agente orquestrador capaz de conduzir todo o ciclo de desenvolvimento d
 
 ## Fluxo
 
-1. Recebe o pedido.
+1. **Receção do pedido.** Intake garante que `.loop-development/` existe, cria a pasta do plano da funcionalidade (`plans/<timestamp>-<slug>/`), regista o pedido bruto no implementation-log e define o `active_plan`. Se estiver em formato antigo (flat), corre `npx loop-development migrate`.
 2. Grill-Me identifica ambiguidades, fazendo **uma pergunta de cada vez** e adaptando as perguntas seguintes às respostas do utilizador.
 3. Researcher consulta documentação oficial.
 4. Planner cria o plano.
 5. Architecture Reviewer valida a arquitetura.
-6. Planner Writer documenta o plano.
+6. Planner Writer documenta o plano (`plans/<id>/spec.md` + `architecture.md` de projeto).
 7. Compacter resume a sessão.
-8. Ticket Generator divide o trabalho em tickets.
-9. Planner Writer documenta cada ticket.
-10. Compacter atualiza o contexto.
-11. Aguarda aprovação do utilizador.
-12. Para cada ticket:
-   - Carrega o contexto (AGENTS.md, README, roadmap, state, ticket, ficheiros relevantes).
-   - Pesquisa documentação oficial das dependências.
-   - Audita versões e compatibilidade.
-   - Implementa.
-   - Refatora.
-   - Gera/atualiza testes.
-   - Executa testes.
-   - Executa typecheck.
-   - Executa lint.
-   - Executa prettier.
-   - Executa auditoria de segurança.
-   - Executa auditoria de performance.
-   - Corrige até todas as verificações passarem.
-   - Atualiza documentação.
-   - Atualiza estado persistente.
-   - Compacta a sessão.
-13. Repete até não existirem tickets.
-14. Final Reviewer executa revisão global.
-15. Projeto concluído.
+8. **PARAGEM OBRIGATÓRIA — aprovação do plano.**
+9. Task Generator divide o trabalho em tarefas.
+10. Planner Writer documenta cada tarefa (`plans/<id>/tasks/*.md`).
+11. Compacter atualiza o contexto.
+12. **PARAGEM OBRIGATÓRIA — aprovação da lista de tarefas.**
+13. Para cada tarefa (na ordem):
+    - Carrega o contexto (AGENTS.md, README, architecture.md, spec e state do plano ativo, tarefa, histórico, ficheiros relevantes).
+    - Audita versões e compatibilidade das dependências.
+    - Implementa.
+    - Refatora.
+    - Gera/atualiza testes.
+    - Verifica: testes, typecheck, lint, prettier.
+    - Auditoria de segurança.
+    - Auditoria de performance.
+    - Corrige até todas as verificações passarem.
+    - Atualiza documentação (README, changelog, ADRs).
+    - Commita com scope do slug do plano.
+    - Atualiza estado persistente.
+    - Compacta a sessão.
+14. Repete até não existirem tarefas pendentes.
+15. Final Reviewer executa revisão global.
+16. Plano concluído: State Manager marca o plano `done` e limpa o `active_plan`.
+
+O comando `/loop-development-continue [<id>]` retoma o plano ativo (ou o id indicado, trocando o `active_plan` via State Manager) na fase onde ficou, sem repetir fases já concluídas nem re-pedir aprovações já concedidas.
 
 ## Estado persistente
 
-.loop-development/
-- state.json
-- roadmap.md
-- architecture.md
-- project-summary.md
-- implementation-log.md
-- risks.md
-- decisions.md
-- changelog.md
-- tickets/
-- summaries/
-- metrics/
+Dois níveis, em `.loop-development/`:
+
+**Nível de projeto** (partilhado por todas as funcionalidades):
+- `state.json` — fino: `version`, `active_plan`, registo `plans[]`, configuração (`min_coverage`).
+- `architecture.md`
+- `project-summary.md`
+- `changelog.md`
+- `risks.md`
+
+**Nível de plano** — `plans/<YYYYMMDD.HHMM-<slug>>/`, uma pasta por funcionalidade:
+- `state.json` — fase, `current_task`, `tasks_done`/`tasks_pending`.
+- `spec.md` — especificação/plano macro aprovado.
+- `decisions.md` — ADRs da funcionalidade.
+- `implementation-log/` — shards mensais (`YYYY-MM.md`) + `index.md`.
+- `tasks/` — uma tarefa por ficheiro (`001-<slug>.md`).
+- `summaries/` — resumos de sessão (Compacter).
+- `metrics/` — métricas por tarefa.
+
+O formato antigo (flat: `roadmap.md`, `tickets/`, etc.) é convertido por `npx loop-development migrate` para `plans/<timestamp>-projeto-inicial/`.
 
 ## Context Loader
 
 Antes de qualquer execução deve carregar automaticamente:
 - AGENTS.md
-- opencode.json
 - README.md
-- roadmap.md
-- state.json
-- ticket atual
-- histórico do ticket
+- `state.json` de projeto (para descobrir o `active_plan` e configuração)
+- `architecture.md` e `risks.md` de projeto
+- `spec.md`, `state.json` e `decisions.md` do plano ativo
+- `implementation-log/` (index + shards relevantes ao histórico da tarefa)
+- tarefa atual (`plans/<id>/tasks/<task-id>.md`)
 - ficheiros afetados
-- documentação das dependências relevantes
 
-## Critérios para concluir um ticket
+## Critérios para concluir uma tarefa
 
 Obrigatoriamente:
 - Implementação completa.
 - Testes aprovados.
-- Cobertura mínima (configurável).
+- Cobertura mínima (configurável, default 80).
 - Typecheck sem erros.
 - Lint sem erros.
 - Prettier aplicado.
@@ -104,6 +110,7 @@ Obrigatoriamente:
 - CHANGELOG atualizado (quando aplicável).
 - Estado persistido.
 - Sessão compactada.
+- Commit criado.
 
 ## Responsabilidades dos subagents
 
@@ -127,7 +134,7 @@ Obrigatoriamente:
 - Versões recomendadas
 
 ### Implementer
-- Implementação do ticket
+- Implementação da tarefa
 
 ### Refactorer
 - Código morto
@@ -137,7 +144,7 @@ Obrigatoriamente:
 
 ### Test Writer
 - Configurar testes se inexistentes
-- Criar testes do ticket
+- Criar testes da tarefa
 
 ### Verifier
 - Tests
@@ -167,12 +174,13 @@ Obrigatoriamente:
 - README
 - CHANGELOG
 - API Docs
-- ADR
-- Roadmap
+- ADR (plans/<id>/decisions.md)
+- Spec do plano
 
 ### State Manager
-- Atualiza progresso
+- Atualiza progresso (projeto + plano ativo)
 - Guarda estado
+- Mantém o implementation-log
 
 ### Compacter
 - Resume contexto para reduzir consumo de tokens
@@ -187,12 +195,22 @@ Obrigatoriamente:
 - Código morto
 - Dependências órfãs
 
+## CLI
+
+- `npx loop-development init [--project]` — instalação global e/ou preparação do projeto.
+- `npx loop-development update` — re-sincronização idempotente.
+- `npx loop-development uninstall` — remoção limpa.
+- `npx loop-development status` — estado da instalação + planos/tarefas.
+- `npx loop-development migrate [<dir>]` — converte formato antigo para a estrutura por planos.
+- `npx loop-development set-model <tier> <modelo>` — troca o modelo de uma camada.
+
 ## Filosofia
 
 - Planeamento antes da implementação.
-- Um ticket de cada vez.
-- Estado persistente.
+- Um plano por funcionalidade; um plano ativo de cada vez.
+- Uma tarefa de cada vez.
+- Estado persistente em dois níveis (projeto + plano).
 - Evidências objetivas para concluir tarefas.
 - Contexto mínimo carregado automaticamente.
 - Correção iterativa até todas as verificações passarem.
-- Loop contínuo até 100% do projeto concluído.
+- Loop contínuo até 100% do plano concluído.

@@ -3,10 +3,12 @@
 #
 # Uso:
 #   ./scripts/set-model.sh reasoning anthropic/claude-opus-4-8
-#   ./scripts/set-model.sh execution opencode/mimo-v2.5-free
+#   ./scripts/set-model.sh coding opencode/nemotron-3-ultra-free
+#   ./scripts/set-model.sh docs opencode/ling-3.0-tiny-free
 #   ./scripts/set-model.sh mechanical opencode/deepseek-v4-flash-free
+#   ./scripts/set-model.sh execution opencode/nemotron-3-ultra-free   # alias deprecado de coding
 #
-# Tiers existentes: reasoning, execution, mechanical
+# Tiers existentes: reasoning, coding, docs, mechanical
 # Corre a partir da raiz do pacote (onde está esta pasta scripts/).
 
 set -euo pipefail
@@ -15,8 +17,13 @@ TIER="${1:-}"
 MODEL="${2:-}"
 
 if [[ -z "$TIER" || -z "$MODEL" ]]; then
-  echo "Uso: $0 <reasoning|execution|mechanical> <provider/model-id>"
+  echo "Uso: $0 <reasoning|coding|docs|mechanical> <provider/model-id>"
   exit 1
+fi
+
+if [[ "$TIER" == "execution" ]]; then
+  echo "Aviso: o tier 'execution' foi renomeado. Usa 'coding' a partir de agora."
+  TIER="coding"
 fi
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../agents" && pwd)"
@@ -31,7 +38,7 @@ for f in "$DIR"/*.md; do
 done
 
 if [[ "$CHANGED" -eq 0 ]]; then
-  echo "Nenhum agente encontrado com tier '${TIER}'. Tiers válidos: reasoning, execution, mechanical"
+  echo "Nenhum agente encontrado com tier '${TIER}'. Tiers válidos: reasoning, coding, docs, mechanical"
   exit 1
 fi
 

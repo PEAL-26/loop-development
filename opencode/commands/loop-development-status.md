@@ -4,4 +4,4 @@ agent: state-manager
 subtask: true
 ---
 
-Lê .loop-development/state.json e .loop-development/roadmap.md e apresenta um resumo objetivo do estado atual: fase corrente, tickets concluídos, ticket em curso, tickets pendentes, e quaisquer riscos ou bloqueios registados em .loop-development/risks.md.
+Lê `.loop-development/state.json` (nível de projeto), o `state.json` do plano ativo e `.loop-development/risks.md`, e apresenta um resumo objetivo: lista de planos (id, nome, estado), plano ativo e a sua fase, tarefas concluídas, tarefa em curso, tarefas pendentes, e quaisquer riscos ou bloqueios registados.

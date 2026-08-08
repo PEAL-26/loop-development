@@ -6,6 +6,8 @@ import { installGlobal, installProject, readPackageJson } from "../src/install.j
 import { uninstall } from "../src/uninstall.js";
 import { status } from "../src/status.js";
 import { setModel } from "../src/set-model.js";
+import { auditInstalledModels } from "../src/models.js";
+import { migrateProject } from "../src/plan.js";
 import { BACKEND_PRESETS, FRONTEND_PRESETS, PACKAGE_MANAGERS, findPreset, detectPackageManager, isValidPm } from "../src/presets.js";
 
 const USAGE = `loop-development — agente orquestrador global para o OpenCode
@@ -27,8 +29,17 @@ Uso:
   npx loop-development status [--config-dir <dir>]
       Mostra o estado da instalação e do projeto atual.
 
-  npx loop-development set-model <reasoning|execution|mechanical> <modelo>
+  npx loop-development set-model <reasoning|coding|docs|mechanical> <modelo>
       Troca o modelo de todos os agentes de uma camada (tier).
+      ('execution' continua a funcionar como alias deprecado de 'coding'.)
+
+  npx loop-development models [--config-dir <dir>]
+      Audita os modelos configurados nos agentes instalados contra o catálogo
+      models.dev e reporta modelos deprecated ou inexistentes.
+
+  npx loop-development migrate [<dir>]
+      Converte um projeto no formato antigo (.loop-development/ flat) para a
+      estrutura nova por planos (plans/<timestamp>-projeto-inicial/).
 
   npx loop-development --list-presets
       Lista os presets de stack disponíveis.
@@ -241,6 +252,43 @@ async function runSetModel(rest, flags) {
   }
 }
 
+async function runModels(flags) {
+  try {
+    const models = await auditInstalledModels({ configDir: flags.configDir, log: console.log });
+    if (models.length === 0) {
+      console.log("Nenhum agente com modelo encontrado.");
+      return 0;
+    }
+    console.log("\nModelos nos agentes instalados (vs models.dev):");
+    let problems = 0;
+    for (const { agent, model, status } of models) {
+      const badge = status === "ok" ? "ok" : status === "deprecated" ? "DEPRECATED" : status === "not-found" ? "NÃO ENCONTRADO" : "?";
+      if (status === "deprecated" || status === "not-found") problems += 1;
+      console.log(`  ${badge.padEnd(13)} ${agent.padEnd(24)} ${model}`);
+    }
+    if (problems > 0) {
+      console.log(`\n${problems} modelo(s) com problema. Corre 'loop-development set-model <tier> <novo-modelo>' para corrigir.`);
+    } else {
+      console.log("\nTodos os modelos parecem válidos no catálogo.");
+    }
+    return problems > 0 ? 1 : 0;
+  } catch (err) {
+    console.error(`erro: ${err.message}`);
+    return 1;
+  }
+}
+
+async function runMigrate(rest, flags) {
+  const targetDir = rest[1] ?? process.cwd();
+  const ok = await askConfirmation(`Converter o estado persistente de ${targetDir} para a estrutura por planos?`, { flags, dryRun: flags.dryRun });
+  if (!ok) {
+    console.log("Cancelado.");
+    return 1;
+  }
+  await migrateProject({ targetDir, dryRun: flags.dryRun, log: console.log });
+  return 0;
+}
+
 async function main() {
   const args = argv.slice(2);
   if (args.length === 0) {
@@ -285,6 +333,10 @@ async function main() {
         return 0;
       case "set-model":
         return await runSetModel(rest, flags);
+      case "models":
+        return await runModels(flags);
+      case "migrate":
+        return await runMigrate(rest, flags);
       default:
         console.error(`loop-development: comando desconhecido "${command}"\n\n${USAGE}`);
         return 1;

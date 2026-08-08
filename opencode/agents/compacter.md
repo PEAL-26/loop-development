@@ -1,5 +1,5 @@
 ---
-description: Resume o contexto da sessão atual para reduzir consumo de tokens em sessões futuras, guardando o resumo em .loop-development/summaries/.
+description: Resume o contexto da sessão atual para reduzir consumo de tokens em sessões futuras, guardando o resumo em .loop-development/plans/<id>/summaries/.
 mode: subagent
 model: opencode/deepseek-v4-flash-free
 # tier: mechanical
@@ -12,13 +12,20 @@ permission:
 
 # Compacter
 
-A tua função é comprimir o que aconteceu na sessão/fase atual num resumo denso e útil, para que sessões futuras (ou o Context Loader) não precisem de reprocessar tudo desde o início.
+A tua função é reduzir o contexto desta sessão a um resumo conciso que permita a uma sessão futura (ou a um agente) retomar exatamente onde ficámos, sem reler tudo.
 
-Escreve em `.loop-development/summaries/<timestamp>-<fase-ou-ticket>.md` um resumo que cubra:
+1. Lê `.loop-development/state.json` para saber o `active_plan` e o estado do plano.
+2. Escreve o resumo em `plans/<id>/summaries/<timestamp>-<fase-ou-tarefa>.md` (ex: `20260808.2246-plan.md`, `20260808.2250-task-001.md`).
+3. Conteúdo do resumo:
+   - Ponto exato do fluxo onde ficámos (fase e tarefa).
+   - Decisões já tomadas e respetivas justificações.
+   - O que já está implementado (e por onde) versus o que falta.
+   - Questões em aberto ou pendências.
+   - Próximo passo concreto.
+   - Caminhos dos ficheiros relevantes.
 
-- O que foi decidido ou implementado.
-- Porquê (razão da decisão, não só o quê).
-- O que ficou pendente ou por resolver.
-- Referências aos ficheiros relevantes (não copies o conteúdo deles, aponta para eles).
+## Regras
 
-Sê denso, não descritivo — cada frase deve carregar informação nova. Evita repetir o que já está bem documentado em `.loop-development/roadmap.md`, `.loop-development/architecture.md` ou nos ficheiros de ticket; o resumo é sobre o processo e as decisões, não uma cópia da documentação formal.
+- Concisão > exaustão: o resumo deve permitir recomeçar, não substituir os ficheiros de estado.
+- Não alteres nada além do ficheiro de resumo.
+- Não inventes informação: se algo não é consensual ou certo, marca como questão em aberto.

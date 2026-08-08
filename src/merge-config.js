@@ -1,13 +1,16 @@
 import { readFile, writeFile, rename, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
-import { AGENT_NAME, INTERNAL_AGENTS, PERMISSION_KEYS, EXECUTION_AGENTS, STALE_AGENT_KEYS } from "./constants.js";
+import { AGENT_NAME, INTERNAL_AGENTS, INTERNAL_READ_AGENTS, PERMISSION_KEYS, EXECUTION_AGENTS, STALE_AGENT_KEYS } from "./constants.js";
 
 export const MANAGED_KEYS = [
   `agent.${AGENT_NAME}.permission.task`,
   ...PERMISSION_KEYS.map((k) => `agent.${AGENT_NAME}.permission.${k}`),
   ...INTERNAL_AGENTS.flatMap((name) =>
     PERMISSION_KEYS.map((k) => `agent.${name}.permission.${k}`)
+  ),
+  ...INTERNAL_READ_AGENTS.flatMap((name) =>
+    PERMISSION_KEYS.filter((k) => k !== "edit").map((k) => `agent.${name}.permission.${k}`)
   ),
   ...EXECUTION_AGENTS.flatMap((name) => [`agent.${name}.permission.bash`])
 ];

@@ -159,6 +159,7 @@ export async function installProject({ targetDir = process.cwd(), force = false,
     log("Edita o AGENTS.md com a stack, comandos reais (testes/lint/typecheck/build) e convenções do projeto.");
   }
   log("Para o estado persistente ser usado, garante que .loop-development/ existe na raiz do projeto.");
+  log("Na primeira invocação do loop, o Intake cria a pasta do plano da funcionalidade em .loop-development/plans/.");
 
   return { targetDir, copied: results.copied, existed: results.existed, presets: withPresets };
 }

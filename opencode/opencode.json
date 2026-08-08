@@ -11,7 +11,7 @@
           "planner": "allow",
           "planner-writer": "allow",
           "architecture-reviewer": "allow",
-          "ticket-generator": "allow",
+          "task-generator": "allow",
           "dependency-auditor": "allow",
           "context-loader": "allow",
           "implementer": "allow",
@@ -52,7 +52,7 @@
         "glob": { ".loop-development/**": "allow" }
       }
     },
-    "ticket-generator": {
+    "task-generator": {
       "permission": {
         "read": { ".loop-development/**": "allow" },
         "edit": { ".loop-development/**": "allow" },
@@ -76,12 +76,22 @@
     },
     "implementer": {
       "permission": {
+        "read": { ".loop-development/**": "allow" },
+        "glob": { ".loop-development/**": "allow" },
         "bash": "allow"
       }
     },
     "test-writer": {
       "permission": {
+        "read": { ".loop-development/**": "allow" },
+        "glob": { ".loop-development/**": "allow" },
         "bash": "allow"
+      }
+    },
+    "git-manager": {
+      "permission": {
+        "read": { ".loop-development/**": "allow" },
+        "glob": { ".loop-development/**": "allow" }
       }
     },
     "verifier": {

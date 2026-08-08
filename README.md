@@ -85,6 +85,8 @@ Depois **revisa o `AGENTS.md`** — é isto que dá ao Verifier e ao Test Writer
 | `loop-development uninstall` | Remove apenas o que foi instalado pelo Loop Development (usa o manifesto). |
 | `loop-development status` | Mostra o estado da instalação e do projeto atual. |
 | `loop-development set-model <tier> <modelo>` | Troca o modelo de todos os agentes de uma camada. |
+| `loop-development models` | Audita os modelos dos agentes instalados contra o catálogo models.dev. |
+| `loop-development migrate [<dir>]` | Converte um projeto do formato antigo (`.loop-development/` flat) para a estrutura por planos. |
 | `loop-development --list-presets` | Lista os presets de stack disponíveis. |
 | `loop-development --version` / `--help` | Versão / ajuda. |
 
@@ -102,13 +104,15 @@ Opções comuns: `--yes` (não confirmar), `--force` (sobrescrever existentes), 
 
 No TUI/CLI do OpenCode, prime `Tab` para trocar de agente até chegares ao `loop-development`, e conversa normalmente, descreve o que queres construir.
 
+> Cada invocação do `/loop-development` (ou do agente primário com um pedido novo) **cria um plano novo** — isto permite usar o Loop Development em projetos existentes, uma funcionalidade de cada vez, sem misturar especificações, tarefas ou histórico de funcionalidades diferentes. Todo o estado de uma funcionalidade vive em `.loop-development/plans/<timestamp>-<slug>/`; arquitetura, changelog, riscos e resumo do projeto ficam no nível partilhado do projeto.
+
 **Retomar trabalho numa sessão nova:**
 
 ```
-/loop-development-continue
+/loop-development-continue [id-ou-slug-do-plano]
 ```
 
-Lê `.loop-development/state.json` e continua exatamente de onde ficou, sem repetir fases já aprovadas.
+Lê `.loop-development/state.json`, retoma o plano ativo (ou o plano indicado como argumento) e continua exatamente de onde ficou, sem repetir fases já aprovadas.
 
 **Ver o estado atual sem interromper o loop:**
 
@@ -118,16 +122,40 @@ Lê `.loop-development/state.json` e continua exatamente de onde ficou, sem repe
 
 ## O que esperar do fluxo
 
-1. Intake regista o pedido e garante que `.loop-development/` existe.
+1. Intake regista o pedido, garante que `.loop-development/` existe e cria uma pasta de plano nova por funcionalidade (`plans/<timestamp>-<slug>/`).
 2. Grill-Me faz perguntas de clarificação (se houver ambiguidades), **uma pergunta de cada vez** (cada resposta influencia a pergunta seguinte), respondes tu.
 3. Researcher + Planner + Architecture Reviewer produzem um plano.
 4. **Paragem obrigatória:** aprovas o plano.
-5. Ticket Generator divide o plano em tickets.
-6. **Paragem obrigatória:** aprovas a lista de tickets.
-7. A partir daqui, o loop corre **sozinho**, ticket a ticket: implementa, refatora, escreve testes, corre verificações (testes/typecheck/lint/prettier/segurança/performance), corrige até tudo passar, documenta, faz commit, persiste estado, sem te voltar a interromper entre tickets, a não ser que surja uma ambiguidade genuína fora do que foi aprovado.
+5. Task Generator divide o plano em tarefas.
+6. **Paragem obrigatória:** aprovas a lista de tarefas.
+7. A partir daqui, o loop corre **sozinho**, tarefa a tarefa: implementa, refatora, escreve testes, corre verificações (testes/typecheck/lint/prettier/segurança/performance), corrige até tudo passar, documenta, faz commit, persiste estado, sem te voltar a interromper entre tarefas, a não ser que surja uma ambiguidade genuína fora do que foi aprovado.
 8. No fim, Final Reviewer faz uma revisão global e o Loop Development reporta um resumo final.
 
 > **Sobre o Grill-Me:** no fluxo, o `grill-me` executado é o **agente do pacote**, invocado pelo orquestrador via Task (e também acessível com `@grill-me`). É independente de qualquer skill do utilizador com o mesmo nome — o agente tem acesso à tool `skill` negado, pelo que as instruções dele vêm sempre do pacote, não de skills instaladas (ex: `~/.agents/skills/grill-me/`).
+
+## Estado persistente (por planos)
+
+A memória do Loop Development vive em `.loop-development/`, separada em dois níveis:
+
+**Nível de projeto** (partilhado por todas as funcionalidades):
+
+- `state.json` — fino: plano ativo (`active_plan`), registo dos planos (`plans[]` com id/nome/estado) e configuração (`min_coverage`).
+- `project-summary.md` — resumo vivo do que o projeto é e faz.
+- `architecture.md` — decisões de arquitetura validadas.
+- `changelog.md` — changelog do projeto.
+- `risks.md` — riscos (podem atravessar funcionalidades).
+
+**Nível de plano** — uma pasta por funcionalidade em `plans/<YYYYMMDD.HHMM-<slug>>/`:
+
+- `state.json` — fase, tarefa em curso e listas `tasks_done`/`tasks_pending` do plano.
+- `spec.md` — especificação/plano aprovado da funcionalidade.
+- `decisions.md` — ADRs curtos específicos da funcionalidade.
+- `implementation-log/` — histórico com shards mensais (`YYYY-MM.md`) + `index.md`; o Context Loader lê só o shard relevante.
+- `tasks/` — uma tarefa por ficheiro (`001-<slug>.md`).
+- `summaries/` — resumos de sessões produzidos pelo Compacter.
+- `metrics/` — métricas por tarefa (`<task-id>.json`).
+
+Quando existe apenas um plano, o formato antigo (flat) é convertido automaticamente na primeira invocação — ou manualmente com `npx loop-development migrate`.
 
 ## Modelos e camadas (tiers)
 
@@ -136,27 +164,28 @@ Por defeito usa modelos **gratuitos** do OpenCode Zen, agrupados em 3 camadas, c
 | Tier | Agentes | Modelo default |
 |---|---|---|
 | `reasoning` | loop-development, grill-me, researcher, planner, architecture-reviewer, security-auditor, performance-auditor, final-reviewer | `opencode/big-pickle` |
-| `execution` | planner-writer, ticket-generator, implementer, refactorer, test-writer, documentation-writer | `opencode/mimo-v2.5-free` |
+| `coding` | implementer, refactorer, test-writer, task-generator | `opencode/nemotron-3-ultra-free` |
+| `docs` | planner-writer, documentation-writer | `opencode/ling-3.0-tiny-free` |
 | `mechanical` | intake, dependency-auditor, context-loader, verifier, git-manager, state-manager, compacter | `opencode/deepseek-v4-flash-free` |
 
-**Importante:** os modelos gratuitos do OpenCode Zen rodam com frequência (promoções que terminam, modelos que saem/entram). Antes de confiar nestes IDs, corre `/models` no OpenCode para confirmares o que está disponível como gratuito neste momento. Se algum destes IDs já não existir, troca-o.
-
-Nota: o antigo `opencode/minimax-m2.5-free` foi removido do Zen; o sucessor gratuito equivalente é o `opencode/mimo-v2.5-free` (família Xiaomi/MiniMax).
+**Importante:** os modelos gratuitos do OpenCode Zen rodam com frequência (promoções que terminam, modelos que saem/entram). O antigo `opencode/minimax-m2.5-free` foi removido do Zen e o `opencode/mimo-v2.5-free` passou a fazer redirect para um modelo inexistente — o tier `coding` usa agora `opencode/nemotron-3-ultra-free` (alternativa: `opencode/longcat-2.0-free`). Antes de confiar nestes IDs, corre `/models` no OpenCode para confirmares o que está disponível como gratuito neste momento. Se algum destes IDs já não existir, troca-o — o `set-model` avisa se o modelo estiver deprecated ou não constar no models.dev, e `loop-development models` audita todos os agentes instalados contra o catálogo.
 
 Para trocar o modelo de uma camada inteira de uma só vez:
 
 ```bash
 npx loop-development set-model reasoning anthropic/claude-opus-4-8
-npx loop-development set-model execution opencode/mimo-v2.5-free
+npx loop-development set-model coding opencode/nemotron-3-ultra-free
+npx loop-development set-model docs opencode/ling-3.0-tiny-free
+npx loop-development models
 ```
 
-(Em bash, o wrapper `~/.config/opencode/scripts/set-model.sh reasoning anthropic/claude-opus-4-8` continua a funcionar.)
+O tier `execution` foi renomeado: a escrita de código passa a `coding` e a escrita de documentação passa a `docs`. `set-model execution <modelo>` continua a funcionar como alias deprecado de `coding`. (Em bash, o wrapper `~/.config/opencode/scripts/set-model.sh reasoning anthropic/claude-opus-4-8` continua a funcionar.)
 
 ## Autonomia e permissões
 
-Dentro do ciclo de um ticket (implementação, testes, lint, prettier), os subagents têm `edit`/`bash` em `allow`, o loop não para para pedir permissão em cada passo. As únicas paragens manuais garantidas são a aprovação do **plano** e da **lista de tickets**.
+Dentro do ciclo de uma tarefa (implementação, testes, lint, prettier), os subagents têm `edit`/`bash` em `allow`, o loop não para para pedir permissão em cada passo. As únicas paragens manuais garantidas são a aprovação do **plano** e da **lista de tarefas**.
 
-**Pasta `.loop-development/` pré-autorizada:** a instalação adiciona `read`/`edit`/`glob` em `allow` para o padrão `.loop-development/**` no agente `loop-development` e nos subagentes internos (context-loader, state-manager, planner-writer, ticket-generator, compacter, refactorer, documentation-writer, final-reviewer). Assim, o fluxo lê e atualiza o estado sem pedir permissão na primeira execução. Se já tiveres `read`/`edit` com `"ask"` nesses agentes, a regra é mesclada (`{ "*": "ask", ".loop-development/**": "allow" }`) — a tua configuração não é sobrescrita. Tudo o resto do projeto segue a tua configuração.
+**Pasta `.loop-development/` pré-autorizada:** a instalação adiciona `read`/`edit`/`glob` em `allow` para o padrão `.loop-development/**` no agente `loop-development` e nos subagentes internos (context-loader, state-manager, planner-writer, task-generator, compacter, refactorer, documentation-writer, final-reviewer), e `read`/`glob` em `allow` para os agentes que apenas lêem o estado dos planos (implementer, test-writer, git-manager). Assim, o fluxo lê e atualiza o estado sem pedir permissão na primeira execução. Se já tiveres `read`/`edit` com `"ask"` nesses agentes, a regra é mesclada (`{ "*": "ask", ".loop-development/**": "allow" }`) — a tua configuração não é sobrescrita. Tudo o resto do projeto segue a tua configuração.
 
 **Agentes de execução com `bash: allow`:** os agentes que executam código (implementer, refactorer, test-writer, verifier, dependency-auditor, security-auditor, performance-auditor) recebem `bash: "allow"` no `opencode.json` para que comandos de pacotes (npm, pnpm, yarn, bun) e de testes corram sem pedir permissão. Se já tinham `bash: "ask"` (ou um mapa de regras antigo), o valor é **sobreposto** — as restantes chaves desses agentes ficam intactas. Para reverter, muda para `ask` no ficheiro do agente em `~/.config/opencode/agents/` e corre `npx loop-development update` para o installer não voltar a sobrepor.
 

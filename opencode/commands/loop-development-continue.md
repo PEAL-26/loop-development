@@ -3,4 +3,4 @@ description: Retoma o Loop Development a partir do estado persistido em .loop-de
 agent: loop-development
 ---
 
-Retoma o trabalho a partir do estado atual em .loop-development/state.json. Carrega o contexto necessário (Context Loader) e continua exatamente de onde ficaste — não repitas fases já concluídas nem peças aprovações já concedidas.
+Retoma o trabalho a partir do estado persistido. Lê `.loop-development/state.json` para descobrir o plano ativo (`active_plan`) e o estado do plano. Se receberes um argumento com um id de plano e o `active_plan` for diferente, muda o `active_plan` para esse id (via `state-manager`) antes de continuar. Carrega o contexto necessário (Context Loader) e continua exatamente de onde ficaste — não repitas fases já concluídas nem peças aprovações já concedidas.
