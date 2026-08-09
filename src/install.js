@@ -158,30 +158,30 @@ export async function installProject({ targetDir = process.cwd(), force = false,
     }
   }
 
-// Grants de acesso ao projeto: permissões aditivas no opencode.json da raiz.
-// read/glob em allow para todos os agentes (com exceções .env), edit em allow
-// apenas para os agentes que escrevem ficheiros. Nunca sobrepõe regras do
-// utilizador — só preenche as chaves que ainda não existirem.
-const projectGrants = buildProjectGrants();
-const configMerge = await mergeConfigFile(targetDir, projectGrants, { dryRun, additiveOnly: true });
-if (configMerge.changed && !dryRun) {
-  const configInfo = configMerge.added.length > 0
-    ? `${configMerge.added.length} permissão(ões) de acesso ao projeto adicionada(s)`
-    : "grants de acesso ao projeto aplicados";
-  log(`config: ${configMerge.backup ? `backup em ${configMerge.backup}` : "criado"} — ${configInfo}`);
-}
+  // Grants de acesso ao projeto: permissões aditivas no opencode.json da raiz.
+  // read/glob em allow para todos os agentes (com exceções .env), edit em allow
+  // apenas para os agentes que escrevem ficheiros. Nunca sobrepõe regras do
+  // utilizador — só preenche as chaves que ainda não existirem.
+  const projectGrants = buildProjectGrants();
+  const configMerge = await mergeConfigFile(targetDir, projectGrants, { dryRun, additiveOnly: true });
+  if (configMerge.changed && !dryRun) {
+    const configInfo = configMerge.added.length > 0
+      ? `${configMerge.added.length} permissão(ões) de acesso ao projeto adicionada(s)`
+      : "grants de acesso ao projeto aplicados";
+    log(`config: ${configMerge.backup ? `backup em ${configMerge.backup}` : "criado"} — ${configInfo}`);
+  }
 
-log(`\nProjeto preparado em ${targetDir}`);
-log(`Arquivos: ${results.copied} criados, ${results.existed} já existiam`);
-if (withPresets) {
-  log("AGENTS.md gerado a partir dos presets — revisa as secções e ajusta comandos reais se necessário.");
-} else {
-  log("Edita o AGENTS.md com a stack, comandos reais (testes/lint/typecheck/build) e convenções do projeto.");
-}
-log("Para o estado persistente ser usado, garante que .loop-development/ existe na raiz do projeto.");
-log("Na primeira invocação do loop, o Intake cria a pasta do plano da funcionalidade em .loop-development/plans/.");
+  log(`\nProjeto preparado em ${targetDir}`);
+  log(`Arquivos: ${results.copied} criados, ${results.existed} já existiam`);
+  if (withPresets) {
+    log("AGENTS.md gerado a partir dos presets — revisa as secções e ajusta comandos reais se necessário.");
+  } else {
+    log("Edita o AGENTS.md com a stack, comandos reais (testes/lint/typecheck/build) e convenções do projeto.");
+  }
+  log("Para o estado persistente ser usado, garante que .loop-development/ existe na raiz do projeto.");
+  log("Na primeira invocação do loop, o Intake cria a pasta do plano da funcionalidade em .loop-development/plans/.");
 
-return { targetDir, copied: results.copied, existed: results.existed, presets: withPresets, projectConfig: { merged: configMerge.changed, added: configMerge.added.length, backup: configMerge.backup } };
+  return { targetDir, copied: results.copied, existed: results.existed, presets: withPresets, projectConfig: { merged: configMerge.changed, added: configMerge.added.length, backup: configMerge.backup } };
 }
 
 // Constrói o mapa de permissões por agente, com base nos agentes embarcados.
