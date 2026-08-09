@@ -5,7 +5,6 @@ model: opencode/deepseek-v4-flash-free
 # tier: mechanical
 temperature: 0.1
 permission:
-  bash: allow
   edit: deny
   webfetch: deny
 ---

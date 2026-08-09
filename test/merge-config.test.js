@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { parseConfig, serializeConfig, mergeManaged, mergeConfigFile, findConfigFile, getPath, removeEntry, removeStaleAgents } from "../src/merge-config.js";
+import { parseConfig, serializeConfig, mergeManaged, mergeConfigFile, findConfigFile, getPath, removeEntry, removeStaleAgents, computeObsoleteCleanup, removeConfigPaths } from "../src/merge-config.js";
 
 const BASE = {
   agent: {
@@ -163,37 +163,71 @@ test("mergeManaged com regras de permissão é idempotente", () => {
   assert.equal(second.added.length, 0);
 });
 
-test("mergeManaged sobrepõe bash existente e reporta como managed", () => {
-  const BASE_BASH = {
-    agent: { implementer: { permission: { bash: "allow" } } }
-  };
-  const user = { agent: { implementer: { permission: { bash: "ask" } } } };
-  const { config, added, managed } = mergeManaged(user, BASE_BASH);
-  assert.equal(getPath(config, "agent.implementer.permission.bash"), "allow");
-  assert.equal(added.length, 0);
-  assert.equal(managed.length, 1);
-  assert.deepEqual(managed[0], { path: "agent.implementer.permission", key: "bash", previous: "ask" });
-});
-
-test("mergeManaged adiciona bash em falta e reporta como added", () => {
-  const BASE_BASH = {
-    agent: { implementer: { permission: { bash: "allow" } } }
-  };
+test("mergeManaged adiciona o mapa permission.bash global e reporta como added", () => {
+  const BASE_BASH = { permission: { bash: { "*": "allow", "git push*": "ask", "rm *": "ask" } } };
   const { config, added, managed } = mergeManaged({}, BASE_BASH);
-  assert.equal(getPath(config, "agent.implementer.permission.bash"), "allow");
-  assert.equal(added.length, 1);
+  const bash = getPath(config, "permission.bash");
+  assert.equal(bash["*"], "allow");
+  assert.equal(bash["git push*"], "ask");
+  assert.equal(bash["rm *"], "ask");
+  assert.equal(added.length, 3);
   assert.equal(managed.length, 0);
-  assert.deepEqual(added[0], { path: "agent.implementer.permission", key: "bash" });
 });
 
-test("mergeManaged bash idempotente", () => {
-  const BASE_BASH = {
-    agent: { implementer: { permission: { bash: "allow" } } }
-  };
+test("mergeManaged é aditivo no permission.bash: não sobrepõe valores existentes", () => {
+  const BASE_BASH = { permission: { bash: { "*": "allow", "git push*": "ask", "rm *": "ask" } } };
+  const user = { permission: { bash: { "git push*": "deny", "git reset --hard*": "allow" } } };
+  const { config, added, managed } = mergeManaged(user, BASE_BASH);
+  const bash = getPath(config, "permission.bash");
+  assert.equal(bash["git push*"], "deny", "preserva o deny do utilizador");
+  assert.equal(bash["git reset --hard*"], "allow", "preserva o allow do utilizador");
+  assert.equal(bash["*"], "allow", "adiciona o default em falta");
+  assert.equal(bash["rm *"], "ask", "adiciona o padrão em falta");
+  assert.equal(managed.length, 0);
+});
+
+test("mergeManaged envolve bash string do utilizador e acrescenta padrões aditivos", () => {
+  const BASE_BASH = { permission: { bash: { "*": "allow", "git push*": "ask" } } };
+  const { config, added } = mergeManaged({ permission: { bash: "ask" } }, BASE_BASH);
+  const bash = getPath(config, "permission.bash");
+  assert.deepEqual(bash, { "*": "ask", "git push*": "ask" });
+  assert.equal(added.length, 2);
+});
+
+test("mergeManaged permission.bash é idempotente", () => {
+  const BASE_BASH = { permission: { bash: { "*": "allow", "git push*": "ask" } } };
   const first = mergeManaged({}, BASE_BASH);
   const second = mergeManaged(first.config, BASE_BASH);
   assert.equal(second.added.length, 0);
   assert.equal(second.managed.length, 0);
+});
+
+test("computeObsoleteCleanup devolve as chaves bash per-agent rastreadas no manifest", () => {
+  const manifest = {
+    configAdded: [
+      { path: "agent.implementer.permission", key: "bash" },
+      { path: "agent.verifier.permission", key: "bash" },
+      { path: "agent.loop-development.permission.task", key: "intake" }
+    ],
+    configManaged: []
+  };
+  assert.deepEqual(computeObsoleteCleanup(manifest).sort(), [
+    "agent.implementer.permission.bash",
+    "agent.verifier.permission.bash"
+  ]);
+});
+
+test("computeObsoleteCleanup ignora manifest sem rastreio", () => {
+  assert.deepEqual(computeObsoleteCleanup({ configAdded: [] }), []);
+  assert.deepEqual(computeObsoleteCleanup(undefined), []);
+});
+
+test("removeConfigPaths remove os caminhos presentes e preserva o resto", () => {
+  const config = { agent: { implementer: { permission: { bash: "allow", read: { x: "allow" } } } }, outro: 1 };
+  const removed = removeConfigPaths(config, ["agent.implementer.permission.bash", "agent.inexistente.permission.bash"]);
+  assert.deepEqual(removed, ["agent.implementer.permission.bash"]);
+  assert.equal(getPath(config, "agent.implementer.permission.read.x"), "allow");
+  assert.equal(config.outro, 1);
 });
 
 test("mergeManaged sobrepõe task existente (ask -> allow) e reporta como managed", () => {
@@ -253,4 +287,53 @@ test("mergeConfigFile remove entries stale e regista removed", async () => {
   assert.equal(getPath(merged, "agent.implementer"), undefined);
   assert.equal(getPath(merged, "agent.loop-development.permission.task.intake"), "allow");
   assert.ok(existsSync(result.backup));
+});
+
+test("mergeConfigFile additiveOnly só acrescenta chaves em falta e preserva as do utilizador", async () => {
+  const dir = tempDir();
+  writeFileSync(
+    join(dir, "opencode.json"),
+    JSON.stringify({ agent: { "loop-development": { permission: { read: { "*": "ask" } } } }, custom: 1 }),
+    "utf8"
+  );
+  const base = {
+    agent: {
+      "loop-development": { permission: { read: { "*": "allow", "*.env": "ask" } } },
+      "outro-agente": { permission: { read: { "*": "allow" } } }
+    }
+  };
+  const result = await mergeConfigFile(dir, base, { additiveOnly: true });
+
+  assert.equal(result.changed, true);
+  assert.equal(result.managed.length, 0, "additiveOnly nunca rege como managed");
+  assert.equal(result.removed.length, 0, "additiveOnly nunca remove");
+  const config = parseConfig(readFileSync(join(dir, "opencode.json"), "utf8"));
+  assert.equal(getPath(config, "agent.loop-development.permission.read.*"), "ask", "regra do utilizador mantida");
+  assert.equal(getPath(config, "agent.outro-agente.permission.read.*"), "allow", "chave em falta preenchida");
+  assert.equal(config.custom, 1, "resto do config preservado");
+  assert.ok(result.added.some((a) => a.path === "agent.outro-agente.permission" && a.key === "read"));
+});
+
+test("mergeConfigFile additiveOnly não escreve quando nada falta", async () => {
+  const dir = tempDir();
+  const before = JSON.stringify({ agent: { "loop-development": { permission: { read: { "*": "allow", "*.env": "deny" } } } } });
+  writeFileSync(join(dir, "opencode.json"), before, "utf8");
+  const result = await mergeConfigFile(
+    dir,
+    { agent: { "loop-development": { permission: { read: { "*": "allow" } } } } },
+    { additiveOnly: true }
+  );
+  assert.equal(result.changed, false);
+  assert.equal(result.added.length, 0);
+  assert.equal(readFileSync(join(dir, "opencode.json"), "utf8"), before);
+});
+
+test("mergeConfigFile additiveOnly faz backup do config existente ao alterar", async () => {
+  const dir = tempDir();
+  writeFileSync(join(dir, "opencode.json"), JSON.stringify({ custom: 1 }), "utf8");
+  const result = await mergeConfigFile(dir, BASE, { additiveOnly: true });
+  assert.equal(result.changed, true);
+  assert.equal(result.backup, join(dir, "opencode.json.bak-loop-development"));
+  assert.ok(existsSync(result.backup));
+  assert.deepEqual(JSON.parse(readFileSync(result.backup, "utf8")), { custom: 1 });
 });

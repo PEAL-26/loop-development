@@ -6,7 +6,6 @@ model: opencode/nemotron-3-ultra-free
 temperature: 0.1
 permission:
   edit: allow
-  bash: allow
   webfetch: deny
 ---
 

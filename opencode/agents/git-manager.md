@@ -6,19 +6,6 @@ model: opencode/deepseek-v4-flash-free
 temperature: 0.1
 permission:
   edit: deny
-  bash:
-    "git status*": allow
-    "git diff*": allow
-    "git add*": allow
-    "git commit*": allow
-    "git log*": allow
-    "git push*": ask
-    "git checkout*": ask
-    "git branch*": ask
-    "git merge*": ask
-    "git rebase*": ask
-    "git reset*": ask
-    "*": deny
   webfetch: deny
 ---
 

@@ -23,9 +23,9 @@ Instala em `~/.config/opencode/`:
 - `commands/` — os comandos `/loop-development`, `/loop-development-continue` e `/loop-development-status`;
 - `scripts/` — o `set-model.sh` (alternativa em bash ao subcomando `set-model`);
 - `templates/` — o esqueleto de estado persistente para novos projetos;
-- mescla no `opencode.json` (ou `opencode.jsonc`) existente as permissões do agente `loop-development` (`task` + `read`/`edit`/`glob` em `allow` para `.loop-development/**`, também nos subagentes internos) — com backup em `opencode.json.bak-loop-development`. Os valores geridos são **sobrepostos** se já existirem (ex: `bash: "ask"` passa a `"allow"`), preservando as restantes customizações; nada que o Loop Development não gere é tocado.
-- garante `bash: "allow"` nos **agentes de execução** (implementer, refactorer, test-writer, verifier, dependency-auditor, security-auditor, performance-auditor) para que npm/pnpm/etc. não peçam permissão durante a implementação;
-- **remove entradas stale** de agentes que o Loop Development já não instala como ficheiros (`implementer`, `verifier`, `loop-triage` em versões antigas), após backup, para não reativarem permissões antigas.
+- mescla no `opencode.json` (ou `opencode.jsonc`) existente as permissões do agente `loop-development` (`task` + `read`/`edit`/`glob` em `allow` para `.loop-development/**`, também nos subagentes internos) — com backup em `opencode.json.bak-loop-development`. Os valores geridos são **sobrepostos** se já existirem, preservando as restantes customizações; nada que o Loop Development não gere é tocado. A exceção é o mapa `permission.bash`, gerido de forma **aditiva**: o installer só **acrescenta** padrões em falta, nunca sobrepõe regras que já tenhas definido.
+- define o **default de shell** no `opencode.json`: `permission.bash` com `"*": "allow"` (todos os agentes correm comandos sem pedir permissão) e uma lista de comandos **destrutivos** em `"ask"` — esses pedem aprovação (ver lista na secção *Autonomia e permissões*);
+- **remove entradas stale** de agentes que o Loop Development já não instala como ficheiros (`implementer`, `verifier`, `loop-triage` em versões antigas), chaves bash per-agent que versões antigas adicionavam, e o artefacto inválido `agent.permission` — após backup, para não reativarem permissões antigas.
 
 Repetir o comando é seguro (idempotente). Reinicia o OpenCode depois de instalar.
 
@@ -47,7 +47,9 @@ npx loop-development init --project
 Cria no diretório atual (ou no caminho indicado: `init --project <dir>`):
 
 - `.loop-development/` — esqueleto do estado persistente;
-- `AGENTS.md` — gerado a partir dos presets de stack que escolheres (ou do template, se escolheres "manual").
+- `AGENTS.md` — gerado a partir dos presets de stack que escolheres (ou do template, se escolheres "manual");
+- **grants de acesso ao projeto** — o `installProject` também grava, de forma **aditiva**, permissões por agente no `opencode.json` da raiz do projeto (criando-o se não existir, com backup `opencode.json.bak-loop-development` se existir). Todos os agentes do pacote recebem `read`/`glob` em `"*": "allow"` e os agentes que escrevem código/testes/docs (implementer, test-writer, refactorer, documentation-writer) recebem `edit` em `allow`. Isto evita o loop parar a pedir permissão em cada leitura/escrita dentro do projeto. O merge é **puramente aditivo**: só preenche as chaves que ainda não existirem — qualquer `permission.read`/`edit` que já tenhas definido no projeto **vence sempre** e nunca é sobreposta.
+- **exceção `.env`:** depois do `"*": "allow"`, cada mapa repete as regras `.env` dos defaults do opencode — `"*.env": "ask"` e `"*.env.*": "ask"` (ficheiros de segredos pedem aprovação, mesmo com o broad allow), e `"*.env.example": "allow"` (templates continuam legíveis/editáveis). Isto é necessário porque as regras do agente são anexadas após os defaults do opencode: sem estas exceções explícitas, o broad `"*": "allow"` desligaria a proteção nativa de `.env`. (Limitção conhecida do opencode: a permissão `glob` casa sobre o *padrão* pedido, não sobre os ficheiros que o padrão devolve — para proteger conteúdo de `.env` contra grep/glob, o guarda é o `read`.)
 
 O comando abre um **wizard interativo** (escolhe backend → frontend → gestor de pacotes). Para não-interativo (CI/scripts):
 
@@ -183,13 +185,24 @@ O tier `execution` foi renomeado: a escrita de código passa a `coding` e a escr
 
 ## Autonomia e permissões
 
-Dentro do ciclo de uma tarefa (implementação, testes, lint, prettier), os subagents têm `edit`/`bash` em `allow`, o loop não para para pedir permissão em cada passo. As únicas paragens manuais garantidas são a aprovação do **plano** e da **lista de tarefas**.
+Dentro do ciclo de uma tarefa (implementação, testes, lint, prettier), o **shell está em `allow` por defeito em todos os agentes**: o loop não para para pedir permissão em cada comando (npm, pnpm, node, git add/commit/log, etc.). As únicas paragens manuais garantidas são a aprovação do **plano** e da **lista de tarefas**, mais os **comandos destrutivos** (lista em baixo) que pedem aprovação mesmo dentro do ciclo.
 
 **Pasta `.loop-development/` pré-autorizada:** a instalação adiciona `read`/`edit`/`glob` em `allow` para o padrão `.loop-development/**` no agente `loop-development` e nos subagentes internos (context-loader, state-manager, planner-writer, task-generator, compacter, refactorer, documentation-writer, final-reviewer), e `read`/`glob` em `allow` para os agentes que apenas lêem o estado dos planos (implementer, test-writer, git-manager). Assim, o fluxo lê e atualiza o estado sem pedir permissão na primeira execução. Se já tiveres `read`/`edit` com `"ask"` nesses agentes, a regra é mesclada (`{ "*": "ask", ".loop-development/**": "allow" }`) — a tua configuração não é sobrescrita. Tudo o resto do projeto segue a tua configuração.
 
-**Agentes de execução com `bash: allow`:** os agentes que executam código (implementer, refactorer, test-writer, verifier, dependency-auditor, security-auditor, performance-auditor) recebem `bash: "allow"` no `opencode.json` para que comandos de pacotes (npm, pnpm, yarn, bun) e de testes corram sem pedir permissão. Se já tinham `bash: "ask"` (ou um mapa de regras antigo), o valor é **sobreposto** — as restantes chaves desses agentes ficam intactas. Para reverter, muda para `ask` no ficheiro do agente em `~/.config/opencode/agents/` e corre `npx loop-development update` para o installer não voltar a sobrepor.
+**Default de shell com comandos destrutivos a pedir aprovação:** a instalação escreve no `opencode.json` o mapa `permission.bash` com `"*": "allow"` (default) e a lista de padrões destrutivos em `"ask"`. Como no opencode as regras do agente prevalecem sobre o global, o installer **deixou de tocar no `bash` per-agent** — por isso o default aplica-se a todos os agentes (orquestrador, executores, planeamento e leitura), exceto aos teus agentes com regra própria (`build`, `plan`, etc.), que mantêm o comportamento que definiste. O mapa é **aditivo**: o installer só acrescenta padrões em falta e nunca sobrepõe valores que já tenhas editado. Para restringir um agente específico, define `permission.bash` nesse agente no `opencode.json`; para desligar um padrão global, apaga-o do mapa ou muda-o para `allow`.
 
-O `git-manager` só tem `allow` em comandos `git` de leitura, `add` e `commit`; `push`, `checkout`, `branch`, `merge`, `rebase` e `reset` ficam sempre em `ask`.
+**Comandos destrutivos (pedem aprovação):**
+
+- git: `push`, `reset --hard`, `clean`, `checkout`, `switch`, `rebase`, `merge`, `branch -D`, `stash drop`;
+- ficheiros: `rm`, `rmdir`, `unlink`, `truncate`;
+- sistema/processos: `sudo`, `shutdown`/`reboot`/`poweroff`, `kill -9`, `pkill`, `killall`, `dd`, `mkfs`, `fdisk`;
+- pacotes: `npm uninstall`, `yarn remove`, `pnpm remove`, `bun remove`, `pip uninstall`;
+- docker: `rm`, `rmi`, `system prune`, `volume rm`, `compose down`;
+- infra: `terraform destroy`, `tofu destroy`.
+
+O `git-manager` herda este default: comandos de leitura/`add`/`commit` correm sem pedir; `push`, `checkout`, `branch`, `merge`, `rebase` e `reset` pedem aprovação — o que materializa a regra dele de "nunca faz push nem muda de branch sem instrução explícita".
+
+Na atualização, o installer **migra** instalações antigas: remove as chaves `bash` per-agent que ele próprio tinha adicionado (tracked no manifest) e o artefacto inválido `agent.permission`, para o default global passar a valer.
 
 Se em algum projeto quiseres mais controlo (ex: `edit: ask` também dentro do ciclo), ajusta a `permission` no ficheiro do agente relevante em `~/.config/opencode/agents/`.
 

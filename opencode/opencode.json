@@ -70,48 +70,25 @@
       "permission": {
         "read": { ".loop-development/**": "allow" },
         "edit": { ".loop-development/**": "allow" },
-        "glob": { ".loop-development/**": "allow" },
-        "bash": "allow"
+        "glob": { ".loop-development/**": "allow" }
       }
     },
     "implementer": {
       "permission": {
         "read": { ".loop-development/**": "allow" },
-        "glob": { ".loop-development/**": "allow" },
-        "bash": "allow"
+        "glob": { ".loop-development/**": "allow" }
       }
     },
     "test-writer": {
       "permission": {
         "read": { ".loop-development/**": "allow" },
-        "glob": { ".loop-development/**": "allow" },
-        "bash": "allow"
+        "glob": { ".loop-development/**": "allow" }
       }
     },
     "git-manager": {
       "permission": {
         "read": { ".loop-development/**": "allow" },
         "glob": { ".loop-development/**": "allow" }
-      }
-    },
-    "verifier": {
-      "permission": {
-        "bash": "allow"
-      }
-    },
-    "dependency-auditor": {
-      "permission": {
-        "bash": "allow"
-      }
-    },
-    "security-auditor": {
-      "permission": {
-        "bash": "allow"
-      }
-    },
-    "performance-auditor": {
-      "permission": {
-        "bash": "allow"
       }
     },
     "documentation-writer": {
@@ -127,6 +104,46 @@
         "edit": { ".loop-development/**": "allow" },
         "glob": { ".loop-development/**": "allow" }
       }
+    }
+  },
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "git push*": "ask",
+      "git reset --hard*": "ask",
+      "git clean*": "ask",
+      "git checkout*": "ask",
+      "git switch*": "ask",
+      "git rebase*": "ask",
+      "git merge*": "ask",
+      "git branch -D*": "ask",
+      "git stash drop*": "ask",
+      "rm *": "ask",
+      "rmdir *": "ask",
+      "unlink *": "ask",
+      "truncate *": "ask",
+      "sudo *": "ask",
+      "shutdown*": "ask",
+      "reboot*": "ask",
+      "poweroff*": "ask",
+      "kill -9*": "ask",
+      "pkill *": "ask",
+      "killall *": "ask",
+      "dd *": "ask",
+      "mkfs*": "ask",
+      "fdisk*": "ask",
+      "npm uninstall*": "ask",
+      "yarn remove*": "ask",
+      "pnpm remove*": "ask",
+      "bun remove*": "ask",
+      "pip uninstall*": "ask",
+      "docker rm*": "ask",
+      "docker rmi*": "ask",
+      "docker system prune*": "ask",
+      "docker volume rm*": "ask",
+      "docker compose down*": "ask",
+      "terraform destroy*": "ask",
+      "tofu destroy*": "ask"
     }
   }
 }

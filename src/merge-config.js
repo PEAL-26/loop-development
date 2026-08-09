@@ -1,7 +1,7 @@
 import { readFile, writeFile, rename, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
-import { AGENT_NAME, INTERNAL_AGENTS, INTERNAL_READ_AGENTS, PERMISSION_KEYS, EXECUTION_AGENTS, STALE_AGENT_KEYS } from "./constants.js";
+import { AGENT_NAME, INTERNAL_AGENTS, INTERNAL_READ_AGENTS, PERMISSION_KEYS, OBSOLETE_BASH_AGENTS, STALE_AGENT_KEYS } from "./constants.js";
 
 export const MANAGED_KEYS = [
   `agent.${AGENT_NAME}.permission.task`,
@@ -12,8 +12,12 @@ export const MANAGED_KEYS = [
   ...INTERNAL_READ_AGENTS.flatMap((name) =>
     PERMISSION_KEYS.filter((k) => k !== "edit").map((k) => `agent.${name}.permission.${k}`)
   ),
-  ...EXECUTION_AGENTS.flatMap((name) => [`agent.${name}.permission.bash`])
+  "permission.bash"
 ];
+
+// Chaves geridas de forma aditiva: só se acrescentam chaves em falta,
+// nunca se sobrepõem valores que o utilizador já tenha definido.
+export const MANAGED_ADDITIVE_KEYS = ["permission.bash"];
 
 export function stripJsonc(text) {
   const kept = [];
@@ -103,6 +107,7 @@ export function mergeManaged(config, baseConfig) {
     if (baseValue == null) continue;
 
     if (typeof baseValue === "object") {
+      const additive = MANAGED_ADDITIVE_KEYS.includes(key);
       const existing = getPath(config, key);
       let target;
       if (existing != null && typeof existing === "object") {
@@ -120,7 +125,7 @@ export function mergeManaged(config, baseConfig) {
         if (!(k in target)) {
           target[k] = v;
           added.push({ path: key, key: k });
-        } else if (target[k] !== v) {
+        } else if (!additive && target[k] !== v) {
           const previous = target[k];
           target[k] = v;
           managed.push({ path: key, key: k, previous });
@@ -161,7 +166,58 @@ export function removeStaleAgents(config) {
   return removed;
 }
 
-export async function mergeConfigFile(configDir, baseConfig, { dryRun = false } = {}) {
+// Caminhos de chaves bash per-agent que o installer adicionou em versões
+// antigas e que agora devem ser removidas para o default global valer.
+export function computeObsoleteCleanup(manifest) {
+  const paths = new Set();
+  const tracked = [...(manifest?.configAdded ?? []), ...(manifest?.configManaged ?? [])].map(
+    (a) => `${a.path}.${a.key}`
+  );
+  for (const name of OBSOLETE_BASH_AGENTS) {
+    const p = `agent.${name}.permission.bash`;
+    if (tracked.includes(p)) paths.add(p);
+  }
+  return [...paths];
+}
+
+export function removeConfigPaths(config, paths) {
+  const removed = [];
+  for (const p of paths) {
+    const keys = p.split(".");
+    let node = config;
+    let present = true;
+    for (const k of keys) {
+      if (node == null || typeof node !== "object" || !(k in node)) {
+        present = false;
+        break;
+      }
+      node = node[k];
+    }
+    if (!present) continue;
+    removeEntry(config, keys.slice(0, -1).join("."), keys[keys.length - 1]);
+    removed.push(p);
+  }
+  return removed;
+}
+
+// Mescla puramente aditiva para o opencode.json do projeto: define uma chave
+// (ex: agent.<nome>.permission.read) apenas se o utilizador ainda não a tiver.
+// Regras explícitas do utilizador no projeto vencem sempre; nada é sobreposto.
+export function mergeAdditiveConfig(config, baseConfig) {
+  const added = [];
+  for (const [agent, agentCfg] of Object.entries(baseConfig.agent ?? {})) {
+    for (const [key, value] of Object.entries(agentCfg.permission ?? {})) {
+      const path = `agent.${agent}.permission.${key}`;
+      if (getPath(config, path) === undefined) {
+        setPath(config, path, structuredClone(value));
+        added.push({ path: `agent.${agent}.permission`, key });
+      }
+    }
+  }
+  return { config, added };
+}
+
+export async function mergeConfigFile(configDir, baseConfig, { dryRun = false, removePaths = [], additiveOnly = false } = {}) {
   await mkdir(configDir, { recursive: true });
   const file = findConfigFile(configDir);
   let config = {};
@@ -175,9 +231,19 @@ export async function mergeConfigFile(configDir, baseConfig, { dryRun = false } 
     }
   }
 
-  const removed = removeStaleAgents(config);
-  const { config: merged, added, managed } = mergeManaged(config, baseConfig);
-  const changed = added.length > 0 || managed.length > 0 || removed.length > 0;
+  let added = [];
+  let managed = [];
+  let removed = [];
+  if (additiveOnly) {
+    ({ config, added } = mergeAdditiveConfig(config, baseConfig));
+  } else {
+    const removedStale = removeStaleAgents(config);
+    const removedPaths = removeConfigPaths(config, removePaths);
+    ({ config, added, managed } = mergeManaged(config, baseConfig));
+    removed = [...removedStale, ...removedPaths];
+  }
+  const changed =
+    added.length > 0 || managed.length > 0 || removed.length > 0;
 
   if (!changed || dryRun) {
     return { file, changed, backup: null, added, managed, removed };
@@ -188,7 +254,7 @@ export async function mergeConfigFile(configDir, baseConfig, { dryRun = false } 
     backup = backupPath(file);
     await rename(file, backup);
   }
-  await writeFile(file, serializeConfig(merged), "utf8");
+  await writeFile(file, serializeConfig(config), "utf8");
 
   return { file, changed: true, backup, added, managed, removed };
 }

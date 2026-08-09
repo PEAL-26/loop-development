@@ -6,7 +6,6 @@ model: opencode/big-pickle
 temperature: 0.3
 permission:
   edit: allow
-  bash: deny
   webfetch: deny
 ---
 

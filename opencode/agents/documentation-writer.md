@@ -6,7 +6,6 @@ model: opencode/ling-3.0-tiny-free
 temperature: 0.1
 permission:
   edit: allow
-  bash: deny
   webfetch: deny
 ---
 

@@ -6,7 +6,6 @@ model: opencode/deepseek-v4-flash-free
 temperature: 0.1
 permission:
   edit: deny
-  bash: allow
   webfetch: allow
 ---
 

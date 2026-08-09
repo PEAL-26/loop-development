@@ -10,7 +10,6 @@ tools:
   patch: false
 permission:
   edit: deny
-  bash: ask
   webfetch: allow
   task:
     "*": deny
@@ -73,7 +72,7 @@ Nunca assumas o estado de memória — lê sempre `.loop-development/state.json`
 0. **Decide o modo.** Antes de tudo, lê `.loop-development/state.json`:
    - **Pedido novo** (comando `/loop-development` ou pedido no agente primário sem plano em curso): segue para o passo 1.
    - **Retoma** (comando `/loop-development-continue`): se for passado um id de plano e o `active_plan` atual for diferente, invoca `state-manager` para trocar o `active_plan` para esse id antes de continuar. Depois lê o `state.json` do plano ativo e retoma exatamente a partir da fase em que ficou — se a fase for `execute` (com `tasks_pending`), salta direto para o passo 13; se for `tasks` (já aprovadas), vai para o passo 13; se for `plan`, continua a partir do passo 9; nas restantes fases, retoma o passo correspondente. Nunca repitas fases já concluídas nem peças aprovações já concedidas.
-1. **Receção do pedido (só em modo pedido novo).** Invoca `intake` com o pedido do utilizador. O Intake garante que `.loop-development/` existe, cria a pasta do plano novo, regista o pedido bruto e define o `active_plan`. Se o Intake reportar formato antigo (flat) por migrar, corre `npx loop-development migrate` (com a tua permissão bash) antes de continuar.
+1. **Receção do pedido (só em modo pedido novo).** Invoca `intake` com o pedido do utilizador. O Intake garante que `.loop-development/` existe, cria a pasta do plano novo, regista o pedido bruto e define o `active_plan`. Se o Intake reportar formato antigo (flat) por migrar, corre `npx loop-development migrate` antes de continuar.
 2. **Grill-Me.** Invoca `grill-me` para identificar ambiguidades no pedido. Se houver perguntas, apresenta-as tu mesmo ao utilizador em texto normal (não é o subagent que fala com o utilizador) e espera pela resposta antes de continuar.
 3. **Research.** Invoca `researcher` para levantar documentação oficial, breaking changes e exemplos relevantes às tecnologias envolvidas.
 4. **Planeamento.** Invoca `planner` com o pedido clarificado e a pesquisa. O Planner produz um plano macro.

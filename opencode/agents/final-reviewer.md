@@ -7,7 +7,6 @@ temperature: 0.2
 permission:
   read: allow
   edit: deny
-  bash: allow
   webfetch: deny
 ---
 
