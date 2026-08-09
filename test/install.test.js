@@ -25,6 +25,8 @@ test("installGlobal copia assets, mescla config e grava manifesto", async () => 
   assert.ok(existsSync(join(dir, "templates", "AGENTS.md.template")));
   assert.ok(existsSync(join(dir, "templates", ".loop-development", "state.json")));
   assert.ok(existsSync(join(dir, "scripts", "set-model.sh")));
+  assert.ok(existsSync(join(dir, "plugins", "telegram.ts")));
+  assert.ok(existsSync(join(dir, "plugins", "core", "telegram-core.js")));
 
   const configFile = findConfigFile(dir);
   assert.ok(existsSync(configFile));
@@ -37,6 +39,7 @@ test("installGlobal copia assets, mescla config e grava manifesto", async () => 
   assert.equal(mainRead[".loop-development/**"], "allow");
   assert.equal(getPath(config, "agent.loop-development.permission.edit")[".loop-development/**"], "allow");
   assert.equal(getPath(config, "agent.loop-development.permission.glob")[".loop-development/**"], "allow");
+  assert.equal(getPath(config, "agent.loop-development.permission.question"), "allow");
   assert.equal(getPath(config, "agent.state-manager.permission.read")[".loop-development/**"], "allow");
   assert.equal(getPath(config, "agent.context-loader.permission.edit")[".loop-development/**"], "allow");
 

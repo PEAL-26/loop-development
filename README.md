@@ -89,6 +89,9 @@ Depois **revisa o `AGENTS.md`** — é isto que dá ao Verifier e ao Test Writer
 | `loop-development set-model <tier> <modelo>` | Troca o modelo de todos os agentes de uma camada. |
 | `loop-development models` | Audita os modelos dos agentes instalados contra o catálogo models.dev. |
 | `loop-development migrate [<dir>]` | Converte um projeto do formato antigo (`.loop-development/` flat) para a estrutura por planos. |
+| `loop-development telegram setup` | Configura o bot do Telegram para aprovações remotas de permissões e respostas a perguntas. |
+| `loop-development telegram status` | Mostra o estado da configuração do Telegram (token, chave de emparelhamento, chats autorizados). |
+| `loop-development telegram reset` | Remove a configuração do Telegram. |
 | `loop-development --list-presets` | Lista os presets de stack disponíveis. |
 | `loop-development --version` / `--help` | Versão / ajuda. |
 
@@ -205,6 +208,30 @@ O `git-manager` herda este default: comandos de leitura/`add`/`commit` correm se
 Na atualização, o installer **migra** instalações antigas: remove as chaves `bash` per-agent que ele próprio tinha adicionado (tracked no manifest) e o artefacto inválido `agent.permission`, para o default global passar a valer.
 
 Se em algum projeto quiseres mais controlo (ex: `edit: ask` também dentro do ciclo), ajusta a `permission` no ficheiro do agente relevante em `~/.config/opencode/agents/`.
+
+## Aprovações remotas via Telegram
+
+O Loop Development inclui um plugin opcional que envia os pedidos de permissão e as perguntas (tool `question`) para um bot do Telegram, para poderes aprovar ou responder a partir do telemóvel.
+
+**1. Cria o bot** no [@BotFather](https://t.me/BotFather) e guarda o token.
+
+**2. Configura o plugin:**
+
+```bash
+npx loop-development telegram setup --token <TOKEN>
+```
+
+O setup verifica o token, guarda a chave de emparelhamento e mostra as instruções para autorizar o teu chat. Alternativas ao `--token`: a env `OPENCODE_TELEGRAM_BOT_TOKEN`, ou gerar/reutilizar a chave com `--pairing-key <chave>`. Com `--reset` começa de novo. O estado fica em `~/.config/opencode/telegram-state.json`.
+
+**3. Emparelha o chat:** abre o bot no Telegram e envia `/start <chave>` (vista em `loop-development telegram status`). Só chats autorizados recebem notificações ou podem responder.
+
+A partir daí, cada `permission.asked` e `question.asked` chega ao Telegram:
+- permissões: botões **Aprovar / Sempre / Rejeitar** (o "Sempre" pede confirmação dos padrões);
+- perguntas: botões por opção (multi-escolha usa "Concluir"), ou responde à mensagem com texto livre se a pergunta aceitar `custom`.
+
+Estado atual: `loop-development telegram status` · Remover: `loop-development telegram reset`.
+
+> O polling usa long-polling (`getUpdates`), por isso não precisa de portas públicas, e tem limite de 1 instância por bot (409 encerra o polling para evitar processamento duplicado).
 
 ## Desenvolvimento
 

@@ -9,6 +9,7 @@ import { setModel } from "../src/set-model.js";
 import { auditInstalledModels } from "../src/models.js";
 import { migrateProject } from "../src/plan.js";
 import { BACKEND_PRESETS, FRONTEND_PRESETS, PACKAGE_MANAGERS, findPreset, detectPackageManager, isValidPm } from "../src/presets.js";
+import { telegramSetup, telegramStatus, telegramReset } from "../src/telegram.js";
 
 const USAGE = `loop-development — agente orquestrador global para o OpenCode
 
@@ -44,6 +45,13 @@ Uso:
   npx loop-development --list-presets
       Lista os presets de stack disponíveis.
 
+  npx loop-development telegram setup [--token <token>] [--pairing-key <chave>] [--reset]
+      Configura o bot do Telegram para aprovações remotas (permissões e perguntas).
+  npx loop-development telegram status
+      Mostra o estado da configuração do Telegram.
+  npx loop-development telegram reset [--yes]
+      Remove a configuração do Telegram.
+
   npx loop-development --version | --help
 
 Opções:
@@ -59,7 +67,7 @@ Opções:
   --version, -v        Mostra a versão`;
 
 function parseFlags(args) {
-  const flags = { yes: false, force: false, dryRun: false, configDir: null, project: false, help: false, version: false, backend: null, frontend: null, pm: null, listPresets: false };
+  const flags = { yes: false, force: false, dryRun: false, configDir: null, project: false, help: false, version: false, backend: null, frontend: null, pm: null, listPresets: false, token: null, pairingKey: null, reset: false };
   const rest = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -96,6 +104,17 @@ function parseFlags(args) {
       case "--config-dir":
         flags.configDir = args[++i];
         if (!flags.configDir) throw new Error("--config-dir requer um valor");
+        break;
+      case "--token":
+        flags.token = args[++i];
+        if (!flags.token) throw new Error("--token requer um valor");
+        break;
+      case "--pairing-key":
+        flags.pairingKey = args[++i];
+        if (!flags.pairingKey) throw new Error("--pairing-key requer um valor");
+        break;
+      case "--reset":
+        flags.reset = true;
         break;
       case "--help":
       case "-h":
@@ -289,6 +308,34 @@ async function runMigrate(rest, flags) {
   return 0;
 }
 
+async function runTelegram(rest, flags) {
+  const sub = rest[1];
+  try {
+    if (sub === "setup") {
+      await telegramSetup({ configDir: flags.configDir, token: flags.token, pairingKey: flags.pairingKey, reset: flags.reset, dryRun: flags.dryRun, log: console.log });
+      return 0;
+    }
+    if (sub === "status") {
+      await telegramStatus({ configDir: flags.configDir, log: console.log });
+      return 0;
+    }
+    if (sub === "reset") {
+      const ok = await askConfirmation("Remover a configuracao do Telegram?", { flags, dryRun: flags.dryRun });
+      if (!ok) {
+        console.log("Cancelado.");
+        return 1;
+      }
+      await telegramReset({ configDir: flags.configDir, dryRun: flags.dryRun, log: console.log });
+      return 0;
+    }
+    console.error(`loop-development: uso: telegram <setup|status|reset>\n\n${USAGE}`);
+    return 1;
+  } catch (err) {
+    console.error(`erro: ${err.message}`);
+    return 1;
+  }
+}
+
 async function main() {
   const args = argv.slice(2);
   if (args.length === 0) {
@@ -337,6 +384,8 @@ async function main() {
         return await runModels(flags);
       case "migrate":
         return await runMigrate(rest, flags);
+      case "telegram":
+        return await runTelegram(rest, flags);
       default:
         console.error(`loop-development: comando desconhecido "${command}"\n\n${USAGE}`);
         return 1;

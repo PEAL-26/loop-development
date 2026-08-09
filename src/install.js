@@ -11,7 +11,7 @@ import { PROJECT_GRANT_MAP, PROJECT_EDIT_AGENTS } from "./constants.js";
 export const PKG_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 export const ASSETS_DIR = join(PKG_ROOT, "opencode");
 
-const DIRS_TO_COPY = ["agents", "commands", "scripts", "templates"];
+const DIRS_TO_COPY = ["agents", "commands", "plugins", "scripts", "templates"];
 
 export async function readPackageJson() {
   return JSON.parse(await readFile(join(PKG_ROOT, "package.json"), "utf8"));

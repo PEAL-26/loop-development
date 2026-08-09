@@ -5,6 +5,7 @@ import { AGENT_NAME, INTERNAL_AGENTS, INTERNAL_READ_AGENTS, PERMISSION_KEYS, OBS
 
 export const MANAGED_KEYS = [
   `agent.${AGENT_NAME}.permission.task`,
+  `agent.${AGENT_NAME}.permission.question`,
   ...PERMISSION_KEYS.map((k) => `agent.${AGENT_NAME}.permission.${k}`),
   ...INTERNAL_AGENTS.flatMap((name) =>
     PERMISSION_KEYS.map((k) => `agent.${name}.permission.${k}`)

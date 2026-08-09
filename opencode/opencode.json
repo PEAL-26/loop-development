@@ -28,7 +28,8 @@
         },
         "read": { ".loop-development/**": "allow" },
         "edit": { ".loop-development/**": "allow" },
-        "glob": { ".loop-development/**": "allow" }
+        "glob": { ".loop-development/**": "allow" },
+        "question": "allow"
       }
     },
     "context-loader": {

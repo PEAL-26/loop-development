@@ -11,6 +11,7 @@ tools:
 permission:
   edit: deny
   webfetch: allow
+  question: allow
   task:
     "*": deny
     intake: allow
