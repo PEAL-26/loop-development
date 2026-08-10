@@ -1,7 +1,7 @@
 ---
 description: Divide um plano aprovado em tarefas pequenas, sequenciadas, com critérios de aceitação objetivos e dependências explícitas entre si.
 mode: subagent
-model: opencode/nemotron-3-ultra-free
+model: opencode/big-pickle
 # tier: coding
 temperature: 0.2
 permission:

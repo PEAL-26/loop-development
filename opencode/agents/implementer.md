@@ -1,7 +1,7 @@
 ---
 description: Implementa a tarefa atual seguindo o plano aprovado, a arquitetura definida e o contexto carregado pelo Context Loader.
 mode: subagent
-model: opencode/nemotron-3-ultra-free
+model: opencode/big-pickle
 # tier: coding
 temperature: 0.2
 permission:

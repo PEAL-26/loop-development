@@ -1,7 +1,7 @@
 ---
 description: Configura a infraestrutura de testes do projeto se ainda não existir, e escreve os testes da tarefa atual, respeitando a cobertura mínima definida em .loop-development/state.json.
 mode: subagent
-model: opencode/nemotron-3-ultra-free
+model: opencode/big-pickle
 # tier: coding
 temperature: 0.1
 permission:

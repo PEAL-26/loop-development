@@ -1,7 +1,7 @@
 ---
 description: Elimina código morto, duplicação e complexidade desnecessária no que foi implementado, melhorando legibilidade sem alterar comportamento.
 mode: subagent
-model: opencode/nemotron-3-ultra-free
+model: opencode/big-pickle
 # tier: coding
 temperature: 0.1
 permission:
