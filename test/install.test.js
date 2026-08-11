@@ -27,6 +27,8 @@ test("installGlobal copia assets, mescla config e grava manifesto", async () => 
   assert.ok(existsSync(join(dir, "scripts", "set-model.sh")));
   assert.ok(existsSync(join(dir, "plugins", "telegram.ts")));
   assert.ok(existsSync(join(dir, "plugins", "core", "telegram-core.js")));
+  assert.ok(existsSync(join(dir, "plugins", "session-title.ts")));
+  assert.ok(existsSync(join(dir, "plugins", "core", "session-title-core.js")));
 
   const configFile = findConfigFile(dir);
   assert.ok(existsSync(configFile));
@@ -233,6 +235,28 @@ test("installProject é idempotente", async () => {
   assert.equal(result.projectConfig.added, 0);
 });
 
+test("installProject adiciona session-titles.json ao .gitignore (aditivo e idempotente)", async () => {
+  const dir = tempDir();
+  writeFileSync(join(dir, ".gitignore"), "node_modules/\n", "utf8");
+
+  const result = await installProject({ targetDir: dir });
+  assert.equal(result.gitignore, true);
+  const first = readFileSync(join(dir, ".gitignore"), "utf8");
+  assert.ok(first.includes(".loop-development/session-titles.json"));
+  assert.ok(first.includes("node_modules/"), "conteúdo pré-existente preservado");
+
+  const second = await installProject({ targetDir: dir });
+  assert.equal(second.gitignore, false, "não duplica a entrada");
+  assert.equal(readFileSync(join(dir, ".gitignore"), "utf8"), first);
+});
+
+test("installProject cria .gitignore quando o projeto não tem um", async () => {
+  const dir = tempDir();
+  await installProject({ targetDir: dir });
+  const content = readFileSync(join(dir, ".gitignore"), "utf8");
+  assert.ok(content.includes(".loop-development/session-titles.json"));
+});
+
 test("installProject grava grants de acesso no opencode.json do projeto", async () => {
   const dir = tempDir();
   const result = await installProject({ targetDir: dir });
@@ -284,6 +308,7 @@ test("installProject --dry-run não escreve o opencode.json do projeto", async (
   await installProject({ targetDir: dir, dryRun: true });
   assert.ok(!existsSync(join(dir, "opencode.json")));
   assert.ok(!existsSync(join(dir, ".loop-development")));
+  assert.ok(!existsSync(join(dir, ".gitignore")));
 });
 
 test("installProject com presets gera AGENTS.md preenchido", async () => {

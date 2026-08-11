@@ -233,6 +233,32 @@ Estado atual: `loop-development telegram status` · Remover: `loop-development t
 
 > O polling usa long-polling (`getUpdates`), por isso não precisa de portas públicas, e tem limite de 1 instância por bot (409 encerra o polling para evitar processamento duplicado).
 
+## Títulos de sessão com o nome do plano ativo
+
+O Loop Development inclui um plugin que renomeia automaticamente as sessões do opencode com o nome do plano ativo de `.loop-development/state.json` (ex: `20260808.2246-login-google` → **Login Google**), para conseguires ver a funcionalidade em curso na lista de sessões sem abrir cada uma.
+
+O comportamento é controlado por `~/.config/opencode/session-title.jsonc` (tudo opcional):
+
+```jsonc
+{
+  "enabled": true,                  // ativa/desativa o rename automático
+  "agents": ["loop-development"],   // agentes cujas sessões são renomeadas
+  "prefix": "",                     // texto antes do nome do plano
+  "suffix": "",                     // texto depois do nome do plano
+  "mode": "first",                  // "first" | "always" | "never"
+  "debug": false                    // log detalhado de cada decisão
+}
+```
+
+Modos de `mode`:
+- `first` (default): sobrescreve o título na 1ª vez e mantém-no enquanto for o que o plugin escreveu (ou um "Nova sessão"). Trocar de plano a meio da sessão atualiza o título; renomes manuais ficam intactos.
+- `always`: sobrepõe sempre que o plano ativo mudar.
+- `never`: só define o título quando a sessão ainda tem o default.
+
+O estado (último título definido por sessão) fica em `.loop-development/session-titles.json` do projeto, por isso renomes manuais continuam respeitados entre reinícios. O ficheiro é por-máquina e o `loop-development init` adiciona-o ao `.gitignore` do projeto.
+
+> **A atualizar de versões antigas**: os plugins anteriores de rename de sessão estão quebrados e devem ser removidos à mão — apaga `~/.config/opencode/plugins/session-auto-rename.ts` e retira `"opencode-session-auto-rename"` do array `plugin` do teu `opencode.json`, depois corre `npx loop-development update` e reinicia o opencode.
+
 ## Desenvolvimento
 
 ```bash

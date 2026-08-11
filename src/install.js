@@ -41,6 +41,24 @@ async function writeFileIfNeeded(dst, content, force) {
   return "copied";
 }
 
+// Adiciona uma entrada ao .gitignore do projeto, só se ainda não existir.
+// Cria o ficheiro se não houver. Respeita dryRun (reporta sem escrever).
+async function ensureGitignoreEntry(targetDir, entry, { dryRun = false } = {}) {
+  const file = join(targetDir, ".gitignore");
+  let existing = "";
+  try {
+    existing = await readFile(file, "utf8");
+  } catch {
+    existing = "";
+  }
+  const lines = existing.split(/\r?\n/);
+  if (lines.some((l) => l.trim() === entry)) return { changed: false, file };
+  if (dryRun) return { changed: true, file };
+  const prefix = existing === "" || existing.endsWith("\n") ? "" : "\n";
+  await writeFile(file, `${existing}${prefix}${entry}\n`, "utf8");
+  return { changed: true, file };
+}
+
 function uniqueBy(arr, fn) {
   const seen = new Set();
   return arr.filter((x) => {
@@ -171,6 +189,12 @@ export async function installProject({ targetDir = process.cwd(), force = false,
     log(`config: ${configMerge.backup ? `backup em ${configMerge.backup}` : "criado"} — ${configInfo}`);
   }
 
+  // Estado do plugin de títulos de sessão é por-máquina: não deve ser versionado.
+  const gitignore = await ensureGitignoreEntry(targetDir, ".loop-development/session-titles.json", { dryRun });
+  if (gitignore.changed && !dryRun) {
+    log(".gitignore: adicionado .loop-development/session-titles.json (estado local do plugin)");
+  }
+
   log(`\nProjeto preparado em ${targetDir}`);
   log(`Arquivos: ${results.copied} criados, ${results.existed} já existiam`);
   if (withPresets) {
@@ -181,7 +205,7 @@ export async function installProject({ targetDir = process.cwd(), force = false,
   log("Para o estado persistente ser usado, garante que .loop-development/ existe na raiz do projeto.");
   log("Na primeira invocação do loop, o Intake cria a pasta do plano da funcionalidade em .loop-development/plans/.");
 
-  return { targetDir, copied: results.copied, existed: results.existed, presets: withPresets, projectConfig: { merged: configMerge.changed, added: configMerge.added.length, backup: configMerge.backup } };
+  return { targetDir, copied: results.copied, existed: results.existed, presets: withPresets, projectConfig: { merged: configMerge.changed, added: configMerge.added.length, backup: configMerge.backup }, gitignore: gitignore.changed };
 }
 
 // Constrói o mapa de permissões por agente, com base nos agentes embarcados.

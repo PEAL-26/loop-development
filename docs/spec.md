@@ -83,6 +83,25 @@ Dois níveis, em `.loop-development/`:
 
 O formato antigo (flat: `roadmap.md`, `tickets/`, etc.) é convertido por `npx loop-development migrate` para `plans/<timestamp>-projeto-inicial/`.
 
+## Títulos de sessão
+
+O opencode deixa as sessões com "Nova sessão" quando o titling nativo falha (sem `small_model`). O Loop Development inclui um plugin que renomeia as sessões do agente `loop-development` com um nome legível do plano ativo.
+
+**Arquitetura** (padrão telegram-core):
+- `opencode/plugins/session-title.ts` — plugin fino: carrega config, liga hooks.
+- `opencode/plugins/core/session-title-core.js` — lógica pura testável: `computeTitle`, `decideAction`, estado, config.
+
+**Comportamento**:
+- Nome legível do plano: remove o prefixo de timestamp (`YYYYMMDD.HHMM-`) e converte kebab/snake em Title Case (`20260808.2246-login-google` → `Login Google`). Decidido a favor da legibilidade (o id completo fica disponível via estado).
+- Gatilhos híbridos `chat.message` + `session.idle`, idempotente — só chama `session.update` se o título desejado diferir do atual.
+- Âmbito restrito a `agent === "loop-development"` (configurável).
+- Renomeações manuais são respeitadas: compara o título atual com o último definido pelo plugin; a troca de plano a meio da sessão atualiza o título.
+- Primeira vez sobrescreve; sem plano ativo deixa o título como está.
+
+**Config** (`~/.config/opencode/session-title.jsonc`, tudo opcional): `enabled` (true), `agents` (`["loop-development"]`), `prefix` (""), `suffix` (""), `mode` (`first`|`always`|`never`), `debug` (false).
+
+**Estado** (`.loop-development/session-titles.json`, criado lazy): `{ version: 1, titles: { [sessionID]: { title, plan, updatedAt } } }`. É por-máquina e não é versionado — o `installProject` adiciona a entrada ao `.gitignore` do projeto.
+
 ## Context Loader
 
 Antes de qualquer execução deve carregar automaticamente:
