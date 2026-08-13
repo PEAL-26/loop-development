@@ -128,11 +128,11 @@ Lê `.loop-development/state.json`, retoma o plano ativo (ou o plano indicado co
 ## O que esperar do fluxo
 
 1. Intake regista o pedido, garante que `.loop-development/` existe e cria uma pasta de plano nova por funcionalidade (`plans/<timestamp>-<slug>/`).
-2. Grill-Me faz perguntas de clarificação (se houver ambiguidades), **uma pergunta de cada vez** (cada resposta influencia a pergunta seguinte), respondes tu.
+2. Grill-Me conduz uma entrevista iterativa, **uma pergunta de cada vez** (cada resposta influencia a pergunta seguinte). Decisões delegadas são pesquisadas e apresentadas como opções para escolha explícita.
 3. Researcher + Planner + Architecture Reviewer produzem um plano.
 4. **Paragem obrigatória:** aprovas o plano.
-5. Task Generator divide o plano em tarefas.
-6. **Paragem obrigatória:** aprovas a lista de tarefas.
+5. Task Generator divide o plano em tarefas; a aprovação do plano aprova automaticamente essa decomposição.
+6. A lista de tarefas é apresentada apenas como resumo informativo. Se não houver desvios ao plano, a execução começa automaticamente.
 7. A partir daqui, o loop corre **sozinho**, tarefa a tarefa: implementa, refatora, escreve testes, corre verificações (testes/typecheck/lint/prettier/segurança/performance), corrige até tudo passar, documenta, faz commit, persiste estado, sem te voltar a interromper entre tarefas, a não ser que surja uma ambiguidade genuína fora do que foi aprovado.
 8. No fim, Final Reviewer faz uma revisão global e o Loop Development reporta um resumo final.
 
@@ -155,6 +155,7 @@ A memória do Loop Development vive em `.loop-development/`, separada em dois n�
 - `state.json` — fase, tarefa em curso e listas `tasks_done`/`tasks_pending` do plano.
 - `spec.md` — especificação/plano aprovado da funcionalidade.
 - `decisions.md` — ADRs curtos específicos da funcionalidade.
+- `clarifications.md` — histórico persistente do Grill-Me, pesquisas direcionadas e decisões confirmadas.
 - `implementation-log/` — histórico com shards mensais (`YYYY-MM.md`) + `index.md`; o Context Loader lê só o shard relevante.
 - `tasks/` — uma tarefa por ficheiro (`001-<slug>.md`).
 - `summaries/` — resumos de sessões produzidos pelo Compacter.

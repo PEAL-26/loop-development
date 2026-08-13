@@ -21,8 +21,8 @@ A tua função é preparar o terreno antes de qualquer trabalho de planeamento c
    - `<timestamp>` = data e hora atuais no formato `YYYYMMDD.HHMM` (ex: `20260808.2246`).
    - `<slug>` = derivado do pedido bruto: kebab-case, só caracteres alfanuméricos, até ~40 chars (ex: `20260808.2246-login-google`).
    Dentro da pasta, cria o esqueleto:
-   - `state.json` — `{"phase": "intake", "current_task": null, "tasks_done": [], "tasks_pending": [], "last_updated": "<timestamp ISO>"}`.
-   - `spec.md` (cabeçalho mínimo), `decisions.md` (cabeçalho mínimo).
+   - `state.json` — estado inicial com `phase: "intake"`, `grill_status: null`, `pending_question: null`, `pending_research: null`, `current_task: null`, `tasks_done: []`, `tasks_pending: []`, `tasks_approved_at: null`, `tasks_approval_source: null` e `last_updated`.
+   - `spec.md` (cabeçalho mínimo), `decisions.md` (cabeçalho mínimo), `clarifications.md` (cabeçalho mínimo).
    - `implementation-log/index.md` e `implementation-log/<YYYY-MM>.md` (mês atual).
    - Pastas `tasks/`, `summaries/`, `metrics/` (com `.gitkeep`).
 4. Regista o pedido bruto do utilizador tal como recebido (sem reformular) em `implementation-log/<YYYY-MM>.md`, sob um cabeçalho "## Pedido inicial".

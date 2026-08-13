@@ -22,9 +22,13 @@ Trabalhas sempre sobre o **plano ativo** definido em `.loop-development/state.js
 **Atualizar o estado do plano (`plans/<id>/state.json`):**
 
 - `phase` — a fase do fluxo (ex: `intake`, `plan`, `tasks`, `execute`, `done`).
+- `grill_status` — estado da entrevista (`question`, `needs_research`, `resolved`, `blocked`) quando `phase` é `grill`.
+- `pending_question` / `pending_research` — pendência atual do Grill-Me, quando existir.
 - `current_task` — id da tarefa em curso (`001-<slug>` ou `null`).
 - `tasks_done` — array de ids de tarefas concluídas.
 - `tasks_pending` — array de ids de tarefas pendentes.
+- `tasks_approved_at` — timestamp da aprovação automática das tarefas derivada da aprovação do plano.
+- `tasks_approval_source` — deve ser `plan-approval` quando as tarefas forem aprovadas automaticamente.
 - `last_updated` — timestamp ISO.
 
 **Concluir uma tarefa:**
@@ -39,6 +43,8 @@ Trabalhas sempre sobre o **plano ativo** definido em `.loop-development/state.js
 **Registar um risco:** adiciona o risco ao `.loop-development/risks.md` (nível de projeto), com estado aberto/atenuado/fechado.
 
 **Concluir o plano:** quando não restam tarefas pendentes e o `final-reviewer` aprovou, atualiza o registo do plano em `.loop-development/state.json` (`status: "done"`), limpa `active_plan` (para `null`) e atualiza `last_updated`.
+
+**Aprovar tarefas derivadas do plano:** depois de o plano ser aprovado e o Task Generator criar as tarefas, verifica que não existe alteração de escopo nem decisão nova. Regista `tasks_approved_at` e `tasks_approval_source: "plan-approval"`, limpa pendências de aprovação e muda a fase para `execute`. Se houver divergência, não aproves as tarefas: volta ao Grill-Me/Planner para rever o plano.
 
 ## Regras
 

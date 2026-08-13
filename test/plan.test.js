@@ -30,7 +30,7 @@ test("scaffoldPlan cria o esqueleto do plano", async () => {
   const { id, dir: planDir } = await scaffoldPlan({ targetDir: dir, slug: "auth", date: FIXED_DATE });
 
   assert.equal(id, "20260808.2246-auth");
-  for (const f of ["state.json", "spec.md", "decisions.md", "implementation-log/index.md", `implementation-log/2026-08.md`]) {
+  for (const f of ["state.json", "spec.md", "decisions.md", "clarifications.md", "implementation-log/index.md", `implementation-log/2026-08.md`]) {
     assert.ok(existsSync(join(planDir, f)), `falta ${f}`);
   }
   for (const d of ["tasks", "summaries", "metrics"]) {
@@ -42,6 +42,9 @@ test("scaffoldPlan cria o esqueleto do plano", async () => {
   assert.deepEqual(state.tasks_done, []);
   assert.deepEqual(state.tasks_pending, []);
   assert.equal(state.current_task, null);
+  assert.equal(state.grill_status, null);
+  assert.equal(state.tasks_approved_at, null);
+  assert.equal(state.tasks_approval_source, null);
 });
 
 test("detectLegacyLayout deteta formato antigo", () => {

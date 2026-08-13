@@ -30,17 +30,17 @@ Criar um agente orquestrador capaz de conduzir todo o ciclo de desenvolvimento d
 ## Fluxo
 
 1. **Receção do pedido.** Intake garante que `.loop-development/` existe, cria a pasta do plano da funcionalidade (`plans/<timestamp>-<slug>/`), regista o pedido bruto no implementation-log e define o `active_plan`. Se estiver em formato antigo (flat), corre `npx loop-development migrate`.
-2. Grill-Me identifica ambiguidades, fazendo **uma pergunta de cada vez** e adaptando as perguntas seguintes às respostas do utilizador.
-3. Researcher consulta documentação oficial.
+2. Grill-Me conduz uma entrevista iterativa, fazendo **uma pergunta de cada vez**, reavaliando cada resposta e repetindo até não existirem ambiguidades. Decisões delegadas acionam pesquisa direcionada, apresentação de opções e escolha explícita.
+3. Researcher consulta documentação oficial. Se a pesquisa contradisser uma decisão confirmada, o fluxo regressa ao Grill-Me.
 4. Planner cria o plano.
 5. Architecture Reviewer valida a arquitetura.
 6. Planner Writer documenta o plano (`plans/<id>/spec.md` + `architecture.md` de projeto).
 7. Compacter resume a sessão.
-8. **PARAGEM OBRIGATÓRIA — aprovação do plano.**
+8. **PARAGEM OBRIGATÓRIA — aprovação do plano.** Esta aprovação inclui a decomposição normal em tarefas.
 9. Task Generator divide o trabalho em tarefas.
 10. Planner Writer documenta cada tarefa (`plans/<id>/tasks/*.md`).
 11. Compacter atualiza o contexto.
-12. **PARAGEM OBRIGATÓRIA — aprovação da lista de tarefas.**
+12. A lista de tarefas é apresentada apenas informativamente e fica automaticamente aprovada pela aprovação do plano. O State Manager regista `tasks_approved_at` e `tasks_approval_source: "plan-approval"`. Divergências regressam ao Grill-Me/Planner e exigem nova aprovação do plano.
 13. Para cada tarefa (na ordem):
     - Carrega o contexto (AGENTS.md, README, architecture.md, spec e state do plano ativo, tarefa, histórico, ficheiros relevantes).
     - Audita versões e compatibilidade das dependências.
@@ -76,6 +76,7 @@ Dois níveis, em `.loop-development/`:
 - `state.json` — fase, `current_task`, `tasks_done`/`tasks_pending`.
 - `spec.md` — especificação/plano macro aprovado.
 - `decisions.md` — ADRs da funcionalidade.
+- `clarifications.md` — histórico persistente do Grill-Me, pesquisas direcionadas e decisões confirmadas.
 - `implementation-log/` — shards mensais (`YYYY-MM.md`) + `index.md`.
 - `tasks/` — uma tarefa por ficheiro (`001-<slug>.md`).
 - `summaries/` — resumos de sessão (Compacter).

@@ -24,7 +24,8 @@ A tua função é preparar o contexto completo e fiel para o Loop Development to
 3. Lê o estado do plano ativo:
    - `plans/<id>/state.json`.
    - `plans/<id>/spec.md`.
-   - `plans/<id>/decisions.md`.
+    - `plans/<id>/decisions.md`.
+    - `plans/<id>/clarifications.md` (se existir).
    - `plans/<id>/implementation-log/index.md` + o shard do mês em curso + qualquer shard que contenha histórico da tarefa atual (para que se saiba exatamente onde ficámos).
 4. Lê a tarefa atual: `plans/<id>/tasks/<task-id>.md`.
 5. Localiza os ficheiros de código que a tarefa afeta (procura referências no ficheiro da tarefa; se não houver, procura no spec) e lê-os.

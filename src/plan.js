@@ -69,14 +69,20 @@ async function writeScaffoldPlan(dir, date, log) {
   const shard = currentMonthShard(date);
   const planState = {
     phase: "intake",
+    grill_status: null,
+    pending_question: null,
+    pending_research: null,
     current_task: null,
     tasks_done: [],
     tasks_pending: [],
+    tasks_approved_at: null,
+    tasks_approval_source: null,
     last_updated: date.toISOString()
   };
   await writeFile(join(dir, "state.json"), JSON.stringify(planState, null, 2) + "\n", "utf8");
   await writeFile(join(dir, "spec.md"), "# Especificação\n\n> Preenchido pelo Planner Writer após aprovação do plano.\n", "utf8");
   await writeFile(join(dir, "decisions.md"), "# Decisões técnicas do plano\n\n> ADRs curtos: contexto, decisão, alternativas consideradas, consequências.\n", "utf8");
+  await writeFile(join(dir, "clarifications.md"), "# Clarificações do Grill-Me\n\n> Perguntas, respostas, pesquisas direcionadas e decisões confirmadas durante a clarificação do pedido.\n", "utf8");
   await mkdir(join(dir, "implementation-log"), { recursive: true });
   await writeFile(join(dir, "implementation-log", "index.md"), "# Log de implementação — índices\n\n| Mês | Ficheiro |\n|---|---|\n", "utf8");
   await writeFile(join(dir, "implementation-log", `${shard}.md`), `# Log de implementação — ${shard}\n\n> Log cronológico. Uma entrada por tarefa concluída, mais o pedido inicial registado pelo Intake.\n`, "utf8");
@@ -162,9 +168,14 @@ export async function migrateProject({ targetDir = process.cwd(), dryRun = false
 
   const planState = {
     phase: legacyState?.phase ?? "intake",
+    grill_status: null,
+    pending_question: null,
+    pending_research: null,
     current_task: legacyState?.current_ticket ?? legacyState?.current_task ?? null,
     tasks_done: legacyState?.tickets_done ?? legacyState?.tasks_done ?? [],
     tasks_pending: legacyState?.tickets_pending ?? legacyState?.tasks_pending ?? [],
+    tasks_approved_at: null,
+    tasks_approval_source: null,
     last_updated: date.toISOString()
   };
   await writeFile(join(planDir, "state.json"), JSON.stringify(planState, null, 2) + "\n", "utf8");

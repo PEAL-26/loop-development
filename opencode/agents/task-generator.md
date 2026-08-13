@@ -27,5 +27,6 @@ Regras:
 - Uma tarefa não deve exigir tocar em mais do que um número razoável de módulos distintos — se uma tarefa parece grande demais, divide-a.
 - A ordem final da lista de tarefas já deve respeitar as dependências (nenhuma tarefa depende de uma tarefa que vem depois dela na lista).
 - Não dupliques trabalho entre tarefas.
+- As tarefas devem ser uma decomposição fiel do plano aprovado, sem introduzir requisitos, decisões ou alterações de escopo. Se isso for inevitável, reporta a divergência ao Loop Development em vez de a esconder numa tarefa.
 
-Devolve a lista completa e ordenada ao Loop Development, pronta para ser apresentada ao utilizador para aprovação.
+Devolve a lista completa e ordenada ao Loop Development, pronta para ser apresentada ao utilizador como resumo informativo. A aprovação já foi dada com o plano; só uma divergência reportada exige voltar ao Grill-Me/Planner e reaprovar o plano.
