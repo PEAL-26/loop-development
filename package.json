@@ -1,6 +1,6 @@
 {
   "name": "loop-development",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Agente orquestrador global para o OpenCode que conduz todo o ciclo de desenvolvimento de software de forma autónoma",
   "type": "module",
   "bin": {
