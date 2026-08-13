@@ -86,7 +86,10 @@ Depois **revisa o `AGENTS.md`** — é isto que dá ao Verifier e ao Test Writer
 | `loop-development update` | Re-sincroniza a partir do pacote. |
 | `loop-development uninstall` | Remove apenas o que foi instalado pelo Loop Development (usa o manifesto). |
 | `loop-development status` | Mostra o estado da instalação e do projeto atual. |
-| `loop-development set-model <tier> <modelo>` | Troca o modelo de todos os agentes de uma camada. |
+| `loop-development set-model <tier> <modelo>` | Troca o modelo de todos os agentes de uma camada (sintaxe compatível). |
+| `loop-development set-model --<tier> <modelo> ...` | Troca os modelos dos tiers indicados. |
+| `loop-development set-model --all <modelo>` | Troca o modelo de todos os agentes de todos os tiers. |
+| `loop-development set-model --defaults` | Restaura os modelos default de todos os tiers. |
 | `loop-development models` | Audita os modelos dos agentes instalados contra o catálogo models.dev. |
 | `loop-development migrate [<dir>]` | Converte um projeto do formato antigo (`.loop-development/` flat) para a estrutura por planos. |
 | `loop-development telegram setup` | Configura o bot do Telegram para aprovações remotas de permissões e respostas a perguntas. |
@@ -165,27 +168,27 @@ Quando existe apenas um plano, o formato antigo (flat) é convertido automaticam
 
 ## Modelos e camadas (tiers)
 
-Por defeito usa modelos **gratuitos** do OpenCode Zen, agrupados em 3 camadas, cada agente tem um comentário `# tier: <nome>` junto ao campo `model` no seu ficheiro:
+Por defeito usa modelos **gratuitos** do OpenCode Zen, agrupados em 4 camadas, cada agente tem um comentário `# tier: <nome>` junto ao campo `model` no seu ficheiro:
 
 | Tier | Agentes | Modelo default |
 |---|---|---|
 | `reasoning` | loop-development, grill-me, researcher, planner, architecture-reviewer, security-auditor, performance-auditor, final-reviewer | `opencode/big-pickle` |
-| `coding` | implementer, refactorer, test-writer, task-generator | `opencode/nemotron-3-ultra-free` |
+| `coding` | implementer, refactorer, test-writer, task-generator | `opencode/big-pickle` |
 | `docs` | planner-writer, documentation-writer | `opencode/ling-3.0-tiny-free` |
 | `mechanical` | intake, dependency-auditor, context-loader, verifier, git-manager, state-manager, compacter | `opencode/deepseek-v4-flash-free` |
 
-**Importante:** os modelos gratuitos do OpenCode Zen rodam com frequência (promoções que terminam, modelos que saem/entram). O antigo `opencode/minimax-m2.5-free` foi removido do Zen e o `opencode/mimo-v2.5-free` passou a fazer redirect para um modelo inexistente — o tier `coding` usa agora `opencode/nemotron-3-ultra-free` (alternativa: `opencode/longcat-2.0-free`). Antes de confiar nestes IDs, corre `/models` no OpenCode para confirmares o que está disponível como gratuito neste momento. Se algum destes IDs já não existir, troca-o — o `set-model` avisa se o modelo estiver deprecated ou não constar no models.dev, e `loop-development models` audita todos os agentes instalados contra o catálogo.
+**Importante:** os modelos gratuitos do OpenCode Zen rodam com frequência (promoções que terminam, modelos que saem/entram). Antes de confiar nestes IDs, corre `/models` no OpenCode para confirmares o que está disponível como gratuito neste momento. Se algum destes IDs já não existir, troca-o — o `set-model` avisa se o modelo estiver deprecated ou não constar no models.dev, e `loop-development models` audita todos os agentes instalados contra o catálogo.
 
-Para trocar o modelo de uma camada inteira de uma só vez:
+Para trocar os modelos de vários tiers numa só execução:
 
 ```bash
-npx loop-development set-model reasoning anthropic/claude-opus-4-8
-npx loop-development set-model coding opencode/nemotron-3-ultra-free
-npx loop-development set-model docs opencode/ling-3.0-tiny-free
+npx loop-development set-model --reasoning anthropic/claude-opus-4-8 --coding opencode/big-pickle
+npx loop-development set-model --all opencode/big-pickle
+npx loop-development set-model --defaults
 npx loop-development models
 ```
 
-O tier `execution` foi renomeado: a escrita de código passa a `coding` e a escrita de documentação passa a `docs`. `set-model execution <modelo>` continua a funcionar como alias deprecado de `coding`. (Em bash, o wrapper `~/.config/opencode/scripts/set-model.sh reasoning anthropic/claude-opus-4-8` continua a funcionar.)
+Os tiers omitidos numa operação com flags permanecem inalterados. `--dry-run` mostra todas as alterações sem escrever arquivos. A sintaxe antiga `set-model <tier> <modelo>` continua disponível.
 
 ## Autonomia e permissões
 

@@ -5,7 +5,7 @@ import { createInterface as createPrompt } from "node:readline/promises";
 import { installGlobal, installProject, readPackageJson } from "../src/install.js";
 import { uninstall } from "../src/uninstall.js";
 import { status } from "../src/status.js";
-import { setModel } from "../src/set-model.js";
+import { DEFAULT_MODELS, TIERS, setModel, setModels } from "../src/set-model.js";
 import { auditInstalledModels } from "../src/models.js";
 import { migrateProject } from "../src/plan.js";
 import { BACKEND_PRESETS, FRONTEND_PRESETS, PACKAGE_MANAGERS, findPreset, detectPackageManager, isValidPm } from "../src/presets.js";
@@ -31,8 +31,13 @@ Uso:
       Mostra o estado da instalação e do projeto atual.
 
   npx loop-development set-model <reasoning|coding|docs|mechanical> <modelo>
-      Troca o modelo de todos os agentes de uma camada (tier).
-      ('execution' continua a funcionar como alias deprecado de 'coding'.)
+      Troca o modelo de todos os agentes de uma camada (compatibilidade).
+  npx loop-development set-model --reasoning <modelo> [--coding <modelo>] [--docs <modelo>] [--mechanical <modelo>]
+      Troca os modelos dos tiers indicados; tiers omitidos permanecem iguais.
+  npx loop-development set-model --all <modelo>
+      Troca o modelo de todos os agentes de todos os tiers.
+  npx loop-development set-model --defaults
+      Restaura os modelos default de todos os tiers.
 
   npx loop-development models [--config-dir <dir>]
       Audita os modelos configurados nos agentes instalados contra o catálogo
@@ -67,7 +72,7 @@ Opções:
   --version, -v        Mostra a versão`;
 
 function parseFlags(args) {
-  const flags = { yes: false, force: false, dryRun: false, configDir: null, project: false, help: false, version: false, backend: null, frontend: null, pm: null, listPresets: false, token: null, pairingKey: null, reset: false };
+  const flags = { yes: false, force: false, dryRun: false, configDir: null, project: false, help: false, version: false, backend: null, frontend: null, pm: null, listPresets: false, token: null, pairingKey: null, reset: false, modelAll: null, modelDefaults: false, modelTiers: {} };
   const rest = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -116,6 +121,22 @@ function parseFlags(args) {
       case "--reset":
         flags.reset = true;
         break;
+      case "--all":
+        flags.modelAll = args[++i];
+        if (!flags.modelAll) throw new Error("--all requer um modelo");
+        break;
+      case "--defaults":
+        flags.modelDefaults = true;
+        break;
+      case "--reasoning":
+      case "--coding":
+      case "--docs":
+      case "--mechanical": {
+        const tier = a.slice(2);
+        flags.modelTiers[tier] = args[++i];
+        if (!flags.modelTiers[tier]) throw new Error(`${a} requer um modelo`);
+        break;
+      }
       case "--help":
       case "-h":
         flags.help = true;
@@ -261,9 +282,29 @@ async function runUninstall(flags) {
 }
 
 async function runSetModel(rest, flags) {
-  const [tier, model] = rest.slice(1);
   try {
-    await setModel(tier, model, { configDir: flags.configDir, dryRun: flags.dryRun, log: console.log });
+    const positional = rest.slice(1);
+    const flagModes = [flags.modelAll !== null, flags.modelDefaults, Object.keys(flags.modelTiers).length > 0].filter(Boolean).length;
+    if (positional.length > 0 && flagModes > 0) {
+      throw new Error("não combines a sintaxe posicional com --all, --defaults ou flags de tier");
+    }
+
+    if (positional.length > 0) {
+      if (positional.length !== 2) throw new Error(`Uso: loop-development set-model <${TIERS.join("|")}> <provider/model-id>`);
+      await setModel(positional[0], positional[1], { configDir: flags.configDir, dryRun: flags.dryRun, log: console.log });
+      return 0;
+    }
+
+    if (flagModes !== 1) {
+      throw new Error("especifica exatamente uma modalidade: --all <modelo>, --defaults ou flags de tier");
+    }
+
+    const models = flags.modelAll !== null
+      ? Object.fromEntries(TIERS.map((tier) => [tier, flags.modelAll]))
+      : flags.modelDefaults
+        ? DEFAULT_MODELS
+        : flags.modelTiers;
+    await setModels(models, { configDir: flags.configDir, dryRun: flags.dryRun, log: console.log });
     return 0;
   } catch (err) {
     console.error(`erro: ${err.message}`);

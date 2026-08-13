@@ -222,7 +222,10 @@ Obrigatoriamente:
 - `npx loop-development uninstall` — remoção limpa.
 - `npx loop-development status` — estado da instalação + planos/tarefas.
 - `npx loop-development migrate [<dir>]` — converte formato antigo para a estrutura por planos.
-- `npx loop-development set-model <tier> <modelo>` — troca o modelo de uma camada.
+- `npx loop-development set-model <tier> <modelo>` — troca o modelo de uma camada (sintaxe compatível).
+- `npx loop-development set-model --<tier> <modelo> ...` — troca os modelos dos tiers indicados.
+- `npx loop-development set-model --all <modelo>` — troca o modelo de todos os tiers.
+- `npx loop-development set-model --defaults` — restaura os modelos default de todos os tiers.
 
 ## Filosofia
 
