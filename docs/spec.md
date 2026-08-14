@@ -66,7 +66,8 @@ O comando `/loop-development-continue [<id>]` retoma o plano ativo (ou o id indi
 Dois níveis, em `.loop-development/`:
 
 **Nível de projeto** (partilhado por todas as funcionalidades):
-- `state.json` — fino: `version`, `active_plan`, registo `plans[]`, configuração (`min_coverage`).
+- `state.json` — fino: `version`, `active_plan`, registo `plans[]`, configuração (`min_coverage`), e as ligações main/child (`parent` no child, `children[]` no main).
+- `allowed-folders.json` — lista canónica de pastas externas autorizadas (`{ version: 1, folders: [{ path, addedAt, source }] }`).
 - `architecture.md`
 - `project-summary.md`
 - `changelog.md`
@@ -83,6 +84,31 @@ Dois níveis, em `.loop-development/`:
 - `metrics/` — métricas por tarefa.
 
 O formato antigo (flat: `roadmap.md`, `tickets/`, etc.) é convertido por `npx loop-development migrate` para `plans/<timestamp>-projeto-inicial/`.
+
+## Acesso a pastas externas e ligação main/child
+
+### Pastas externas (M002)
+
+O opencode bloqueia o acesso fora da raiz do projeto. O Loop Development oferece uma lista canónica de pastas externas autorizadas:
+
+- **Lista**: `.loop-development/allowed-folders.json` (`{ version: 1, folders: [{ path, addedAt, source }] }`).
+- **Grants**: `permission.external_directory` no `opencode.json` do projeto, com os padrões `<caminho>` e `<caminho>/**` em `allow` (mecanismo nativo do opencode; dentro do projeto os defaults do workspace continuam a valer e `.env` continua protegido).
+- **Merge aditivo**: `writeExternalDirectory`/`updateProjectConfig` só preenchem chaves em falta; regras manuais do utilizador nunca são sobrepostas. `remove`/`clear` só apagam padrões gerados pelo Loop Development.
+- **Caminhos**: normalizados (absolutos, forward slashes, `~` expandido); `add` valida que a pasta existe.
+- **CLI**: `allow add|remove|list|clear` (com `--dry-run`/`--yes`).
+- **Módulo**: `src/access.js` (lista canónica, normalização, grants, extensão defensiva `**/.loop-development/**` para agentes internos sem `"*": "allow"`).
+
+### Ligação main/child (M003)
+
+Quando um projeto vive dentro de outro, o Loop Development liga-os automaticamente para o child poder ler o contexto mínimo do main:
+
+- **Detecção** (`src/link.js`): `findParentProject` sobe até 5 ancestrais e escolhe o mais próximo com `.loop-development/state.json` válido; `findChildProjects` desce a profundidade 1 (ignora `node_modules`, `.git` e pastas ocultas).
+- **Persistência**: `state.json` do child ganha `parent: { path, name, linkedAt }`; o do main ganha `children: [{ path, name, linkedAt }]`. Cadeias são suportadas (um child pode ser main de outro).
+- **Grants**: o child recebe a raiz inteira do main via `external_directory` (leitura).
+- **Contexto mínimo**: o Context Loader lê (só leitura) `architecture.md`, `state.json` e `project-summary.md` do main ao carregar contexto.
+- **Gatilhos**: `installProject` (automático, desativável com `--no-link`), subcomando `link` (reconcilia ligações stale), e Intake corre `npx loop-development link` em cada novo plano.
+- **Unlink**: `unlink <caminho>` remove a referência e os grants (consoante o papel: parent ou child).
+- **Status**: mostra `parent`/`children[]` e a contagem de pastas permitidas.
 
 ## Títulos de sessão
 
@@ -114,6 +140,7 @@ Antes de qualquer execução deve carregar automaticamente:
 - `implementation-log/` (index + shards relevantes ao histórico da tarefa)
 - tarefa atual (`plans/<id>/tasks/<task-id>.md`)
 - ficheiros afetados
+- contexto do main, se existir (`parent` em `state.json`): `architecture.md`, `state.json` e `project-summary.md` do main, **só leitura**
 
 ## Critérios para concluir uma tarefa
 
@@ -223,6 +250,9 @@ Obrigatoriamente:
 - `npx loop-development status` — estado da instalação + planos/tarefas.
 - `npx loop-development migrate [<dir>]` — converte formato antigo para a estrutura por planos.
 - `npx loop-development architecture check [<dir>]` — audita `architecture.md` contra o contrato de conteúdo (read-only; exit code 0 limpo, 1 com violações).
+- `npx loop-development allow add|remove|list|clear <caminho>` — gestão de pastas externas autorizadas (`external_directory`).
+- `npx loop-development link [<dir>]` — liga o projeto ao main, regista children e reconcilia ligações stale.
+- `npx loop-development unlink <caminho>` — remove a ligação main/child (estado + grants).
 - `npx loop-development set-model <tier> <modelo>` — troca o modelo de uma camada (sintaxe compatível).
 - `npx loop-development set-model --<tier> <modelo> ...` — troca os modelos dos tiers indicados.
 - `npx loop-development set-model --all <modelo>` — troca o modelo de todos os tiers.

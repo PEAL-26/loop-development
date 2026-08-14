@@ -11,6 +11,8 @@ import { migrateProject } from "../src/plan.js";
 import { checkArchitecture } from "../src/architecture.js";
 import { BACKEND_PRESETS, FRONTEND_PRESETS, PACKAGE_MANAGERS, findPreset, detectPackageManager, isValidPm } from "../src/presets.js";
 import { telegramSetup, telegramStatus, telegramReset } from "../src/telegram.js";
+import { addAllowedFolder, removeAllowedFolder, listAllowedFolders, clearAllowedFolders } from "../src/access.js";
+import { link, unlink } from "../src/link.js";
 
 const USAGE = `loop-development — agente orquestrador global para o OpenCode
 
@@ -54,6 +56,18 @@ Uso:
       sinaliza, não altera nada. Exit code 0 se limpo, 1 com violações.
       (A poda real é feita pelo Planner Writer ao documentar cada plano.)
 
+  npx loop-development allow add <caminho> | remove <caminho> | list | clear
+      Gere a lista de pastas externas permitidas (fora do diretório do projeto).
+      Escreve permission.external_directory no opencode.json do projeto.
+      add valida que a pasta existe; remove/clear só tocam entradas da lista.
+
+  npx loop-development link
+      Deteta e liga automaticamente o projeto ao main (acima) e aos children
+      (abaixo), persistindo parent/children no state.json e concedendo acesso
+      externo à raiz do main. Idempotente; reconcilia referências stale.
+  npx loop-development unlink <caminho>
+      Desliga a ligação com o main ou o child indicado (estado + grants).
+
   npx loop-development --list-presets
       Lista os presets de stack disponíveis.
 
@@ -77,9 +91,8 @@ Opções:
   --list-presets       Lista os presets disponíveis e sai
   --help, -h           Mostra esta ajuda
   --version, -v        Mostra a versão`;
-
 function parseFlags(args) {
-  const flags = { yes: false, force: false, dryRun: false, configDir: null, project: false, help: false, version: false, backend: null, frontend: null, pm: null, listPresets: false, token: null, pairingKey: null, reset: false, modelAll: null, modelDefaults: false, modelTiers: {} };
+  const flags = { yes: false, force: false, dryRun: false, configDir: null, project: false, help: false, version: false, backend: null, frontend: null, pm: null, listPresets: false, token: null, pairingKey: null, reset: false, noLink: false, modelAll: null, modelDefaults: false, modelTiers: {} };
   const rest = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -127,6 +140,9 @@ function parseFlags(args) {
         break;
       case "--reset":
         flags.reset = true;
+        break;
+      case "--no-link":
+        flags.noLink = true;
         break;
       case "--all":
         flags.modelAll = args[++i];
@@ -257,7 +273,7 @@ async function runInit(flags, rest) {
         return 1;
       }
     }
-    await installProject({ targetDir, force: flags.force, dryRun: flags.dryRun, log: console.log, backend, frontend, pm });
+    await installProject({ targetDir, force: flags.force, dryRun: flags.dryRun, log: console.log, backend, frontend, pm, noLink: flags.noLink });
     return 0;
   }
 
@@ -396,6 +412,76 @@ async function runTelegram(rest, flags) {
   }
 }
 
+async function runAllow(rest, flags) {
+  const sub = rest[1];
+  const projectDir = process.cwd();
+  try {
+    switch (sub) {
+      case "add": {
+        const p = rest[2];
+        if (!p) throw new Error("uso: loop-development allow add <caminho>");
+        const r = await addAllowedFolder({ projectDir, path: p, dryRun: flags.dryRun, log: console.log });
+        if (!r.changed) console.log("Nada a alterar.");
+        return 0;
+      }
+      case "remove": {
+        const p = rest[2];
+        if (!p) throw new Error("uso: loop-development allow remove <caminho>");
+        const r = await removeAllowedFolder({ projectDir, path: p, dryRun: flags.dryRun, log: console.log });
+        if (!r.changed) console.log("Nada a alterar.");
+        return 0;
+      }
+      case "list":
+        await listAllowedFolders(projectDir, console.log);
+        return 0;
+      case "clear": {
+        const ok = await askConfirmation("Remover todas as pastas externas permitidas?", { flags, dryRun: flags.dryRun });
+        if (!ok) {
+          console.log("Cancelado.");
+          return 1;
+        }
+        await clearAllowedFolders({ projectDir, dryRun: flags.dryRun, log: console.log });
+        return 0;
+      }
+      default:
+        console.error(`loop-development: uso: allow <add|remove|list|clear>\n\n${USAGE}`);
+        return 1;
+    }
+  } catch (err) {
+    console.error(`erro: ${err.message}`);
+    return 1;
+  }
+}
+
+async function runLink(rest, flags) {
+  try {
+    const projectDir = rest[1] ?? process.cwd();
+    const result = await link({ projectDir, dryRun: flags.dryRun, log: console.log });
+    if (!result.parent && !result.parentCleared && result.childrenAdded.length === 0 && result.childrenRemoved.length === 0 && !result.parentChildrenAdded) {
+      console.log("Sem ligações detetadas (nem main acima nem children abaixo).");
+    }
+    return 0;
+  } catch (err) {
+    console.error(`erro: ${err.message}`);
+    return 1;
+  }
+}
+
+async function runUnlink(rest, flags) {
+  const p = rest[1];
+  if (!p) {
+    console.error(`loop-development: uso: unlink <caminho>\n\n${USAGE}`);
+    return 1;
+  }
+  try {
+    await unlink({ projectDir: process.cwd(), path: p, dryRun: flags.dryRun, log: console.log });
+    return 0;
+  } catch (err) {
+    console.error(`erro: ${err.message}`);
+    return 1;
+  }
+}
+
 async function main() {
   const args = argv.slice(2);
   if (args.length === 0) {
@@ -448,6 +534,12 @@ async function main() {
         return await runArchitecture(rest, flags);
       case "telegram":
         return await runTelegram(rest, flags);
+      case "allow":
+        return await runAllow(rest, flags);
+      case "link":
+        return await runLink(rest, flags);
+      case "unlink":
+        return await runUnlink(rest, flags);
       default:
         console.error(`loop-development: comando desconhecido "${command}"\n\n${USAGE}`);
         return 1;

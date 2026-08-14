@@ -2,8 +2,6 @@
 
 Agente orquestrador global para o OpenCode que conduz todo o ciclo de desenvolvimento de software de forma autónoma, desde o pedido inicial até à conclusão do projeto, coordenando 20 subagents especializados e mantendo estado persistente em `.loop-development/` dentro de cada projeto.
 
-Baseado na especificação [`docs/spec.md`](docs/spec.md).
-
 ## Requisitos
 
 - Node.js ≥ 18
@@ -93,13 +91,19 @@ Depois **revisa o `AGENTS.md`** — é isto que dá ao Verifier e ao Test Writer
 | `loop-development models` | Audita os modelos dos agentes instalados contra o catálogo models.dev. |
 | `loop-development migrate [<dir>]` | Converte um projeto do formato antigo (`.loop-development/` flat) para a estrutura por planos. |
 | `loop-development architecture check [<dir>]` | Audita `.loop-development/architecture.md` contra o contrato de conteúdo (read-only; exit 0 limpo, 1 com violações). |
+| `loop-development allow add <caminho>` | Autoriza uma pasta fora do projeto (grava no `opencode.json` via `external_directory`). |
+| `loop-development allow remove <caminho>` | Retira a autorização de uma pasta externa. |
+| `loop-development allow list` | Lista as pastas externas autorizadas. |
+| `loop-development allow clear` | Remove todas as autorizações externas. |
+| `loop-development link [<dir>]` | Liga o projeto ao main (ancestral com `.loop-development/`), regista children e reconcilia ligações stale. |
+| `loop-development unlink <caminho>` | Remove a ligação main/child (estado + grants de acesso). |
 | `loop-development telegram setup` | Configura o bot do Telegram para aprovações remotas de permissões e respostas a perguntas. |
 | `loop-development telegram status` | Mostra o estado da configuração do Telegram (token, chave de emparelhamento, chats autorizados). |
 | `loop-development telegram reset` | Remove a configuração do Telegram. |
 | `loop-development --list-presets` | Lista os presets de stack disponíveis. |
 | `loop-development --version` / `--help` | Versão / ajuda. |
 
-Opções comuns: `--yes` (não confirmar), `--force` (sobrescrever existentes), `--dry-run` (mostrar sem alterar), `--config-dir <dir>`. No `init --project`: `--backend <id>`, `--frontend <id>`, `--pm <npm|pnpm|yarn|bun>` (tornam o fluxo não-interativo).
+Opções comuns: `--yes` (não confirmar), `--force` (sobrescrever existentes), `--dry-run` (mostrar sem alterar), `--config-dir <dir>`. No `init --project`: `--backend <id>`, `--frontend <id>`, `--pm <npm|pnpm|yarn|bun>` (tornam o fluxo não-interativo) e `--no-link` (não correr a ligação automática main/child).
 
 ## Como usar
 
@@ -241,6 +245,38 @@ A partir daí, cada `permission.asked` e `question.asked` chega ao Telegram:
 Estado atual: `loop-development telegram status` · Remover: `loop-development telegram reset`.
 
 > O polling usa long-polling (`getUpdates`), por isso não precisa de portas públicas, e tem limite de 1 instância por bot (409 encerra o polling para evitar processamento duplicado).
+
+## Acesso a pastas externas e ligação main/child
+
+### Pastas externas permitidas
+
+O opencode bloqueia por defeito o acesso a ficheiros fora da raiz do projeto. Para autorizar uma pasta externa (ex: um diretório partilhado, um recurso de outro projeto), usa a lista canónica:
+
+```bash
+npx loop-development allow add C:/Users/teu-user/recursos
+npx loop-development allow list
+npx loop-development allow remove C:/Users/teu-user/recursos
+npx loop-development allow clear
+```
+
+O `allow add` valida que a pasta existe, grava a referência em `.loop-development/allowed-folders.json` e escreve de forma **aditiva** o mapa `permission.external_directory` no `opencode.json` do projeto (padrões `<caminho>` e `<caminho>/**` em `allow`, com backup `opencode.json.bak-loop-development`). Regras manuais que já tenhas no `external_directory` nunca são sobrepostas; `remove`/`clear` só apagam padrões que o Loop Development gerou. Caminhos são normalizados (absolutos, forward slashes, `~` expandido). `--dry-run` mostra as alterações sem escrever.
+
+> O mecanismo usa a permissão nativa `permission.external_directory` do opencode: dentro do projeto os defaults do workspace continuam a valer e ficheiros `.env` continuam a pedir aprovação.
+
+### Ligação automática main/child
+
+Quando um projeto vive dentro de outro (monorepos, sub-projetos), o Loop Development liga-os automaticamente para o child poder ler o contexto mínimo do main:
+
+- **Parent/children** ficam em `.loop-development/state.json` (`parent` no child, `children[]` no main) — o `link` deteta o ancestral mais próximo com `.loop-development/` (sobe até 5 níveis) e os children diretos (profundidade 1, ignorando `node_modules`, `.git` e pastas ocultas).
+- O child recebe **acesso de leitura à raiz do main** via `permission.external_directory` e o Context Loader passa a ler `architecture.md`, `state.json` e `project-summary.md` do main (só leitura) ao carregar contexto.
+- Cadeias são suportadas: um child pode ser main de outro child.
+- Automático: o `init --project` corre o `link` no final e o Intake corre `npx loop-development link` em cada novo plano (idempotente). Para desativar no init: `--no-link`.
+
+```bash
+npx loop-development link        # dentro do child: liga ao main e reconcilia stale
+npx loop-development unlink ../main   # remove a ligação (estado + grants)
+npx loop-development status      # mostra parent/children e contagem de pastas permitidas
+```
 
 ## Títulos de sessão com o nome do plano ativo
 

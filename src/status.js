@@ -6,6 +6,7 @@ import { loadManifest } from "./manifest.js";
 import { findConfigFile, parseConfig, getPath } from "./merge-config.js";
 import { readPackageJson } from "./install.js";
 import { countMdFiles } from "./util.js";
+import { loadAllowedFolders } from "./access.js";
 
 export async function getStatus({ configDir, projectDir = process.cwd() } = {}) {
   const dir = resolveConfigDir(configDir);
@@ -42,9 +43,21 @@ export async function getStatus({ configDir, projectDir = process.cwd() } = {}) 
         plans: Array.isArray(state.plans) ? state.plans : [],
         minCoverage: state.min_coverage ?? null,
         version: state.version ?? null,
+        parent: state.parent ?? null,
+        children: Array.isArray(state.children) ? state.children : [],
       };
     } catch {
       projectState = "erro de leitura";
+    }
+  }
+
+  let allowedFolders = 0;
+  if (projectState && projectState !== "erro de leitura") {
+    try {
+      const list = await loadAllowedFolders(projectDir);
+      allowedFolders = list.folders.length;
+    } catch {
+      allowedFolders = -1;
     }
   }
 
@@ -66,7 +79,7 @@ export async function getStatus({ configDir, projectDir = process.cwd() } = {}) 
     }
   }
 
-  return { configDir: dir, packageVersion: pkg.version, installedVersion: manifest.version, agents, commands, configEntries, configRemoved: manifest.configRemoved ?? [], projectState, activePlanState, manifestExists: (manifest.files?.length ?? 0) > 0 };
+  return { configDir: dir, packageVersion: pkg.version, installedVersion: manifest.version, agents, commands, configEntries, configRemoved: manifest.configRemoved ?? [], projectState, activePlanState, manifestExists: (manifest.files?.length ?? 0) > 0, allowedFolders };
 }
 
 export async function status(opts) {
@@ -106,6 +119,15 @@ export async function status(opts) {
     return `Projeto: ${parts.join("; ")}`;
   })();
   lines.push(planLine);
+
+  if (data.projectState && data.projectState !== "erro de leitura") {
+    const parts = [];
+    if (data.projectState.parent) parts.push(`main: ${data.projectState.parent.path}`);
+    if (data.projectState.children.length > 0) parts.push(`children: ${data.projectState.children.length}`);
+    if (data.allowedFolders > 0) parts.push(`${data.allowedFolders} pasta(s) externa(s) permitida(s)`);
+    if (parts.length > 0) lines.push(`Ligações: ${parts.join("; ")}`);
+  }
+
   (opts?.log ?? ((s) => console.log(s)))(lines.join("\n"));
   return data;
 }

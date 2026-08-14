@@ -14,22 +14,27 @@ permission:
 
 A tua função é preparar o contexto completo e fiel para o Loop Development tomar decisões — sem inventar nada. Só lês.
 
-1. Lê `.loop-development/state.json` (nível de projeto) para descobrir o `active_plan` e a configuração (ex: `min_coverage`).
+1. Lê `.loop-development/state.json` (nível de projeto) para descobrir o `active_plan`, a configuração (ex: `min_coverage`) e a ligação a outros projetos (`parent`/`children`).
 2. Lê os ficheiros de contexto de projeto:
    - `AGENTS.md` (se existir).
    - `README.md` (se existir).
    - `.loop-development/project-summary.md`.
    - `.loop-development/architecture.md`.
    - `.loop-development/risks.md` (só as entradas relevantes para a tarefa em curso).
-3. Lê o estado do plano ativo:
+3. **Contexto do projeto maior:** se o `state.json` tiver um campo `parent` (este projeto é child de um main), lê também, **só leitura**, os seguintes ficheiros do main (`parent.path`):
+   - `parent.path/.loop-development/state.json` (para saber o estado do main).
+   - `parent.path/.loop-development/architecture.md` (estrutura do projeto maior).
+   - `parent.path/.loop-development/project-summary.md` (o que o projeto maior é e faz).
+   Se estes ficheiros não existirem ou não forem legíveis, reporta que não existem em vez de assumir. Se o `state.json` tiver `children[]`, lista-os como subprojetos ligados (sem carregar o contexto deles).
+4. Lê o estado do plano ativo:
    - `plans/<id>/state.json`.
    - `plans/<id>/spec.md`.
     - `plans/<id>/decisions.md`.
     - `plans/<id>/clarifications.md` (se existir).
    - `plans/<id>/implementation-log/index.md` + o shard do mês em curso + qualquer shard que contenha histórico da tarefa atual (para que se saiba exatamente onde ficámos).
-4. Lê a tarefa atual: `plans/<id>/tasks/<task-id>.md`.
-5. Localiza os ficheiros de código que a tarefa afeta (procura referências no ficheiro da tarefa; se não houver, procura no spec) e lê-os.
-6. Devolve um resumo estruturado com: resumo do projeto, arquitetura vigente, estado atual (fase + tarefa), a tarefa em curso com os seus critérios de aceitação, histórico relevante, riscos relevantes, e o caminho exato de cada ficheiro afetado.
+5. Lê a tarefa atual: `plans/<id>/tasks/<task-id>.md`.
+6. Localiza os ficheiros de código que a tarefa afeta (procura referências no ficheiro da tarefa; se não houver, procura no spec) e lê-os.
+7. Devolve um resumo estruturado com: resumo do projeto, arquitetura vigente, estado atual (fase + tarefa), a tarefa em curso com os seus critérios de aceitação, histórico relevante, riscos relevantes, e o caminho exato de cada ficheiro afetado.
 
 ## Regras
 

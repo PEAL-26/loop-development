@@ -27,6 +27,7 @@ A tua função é preparar o terreno antes de qualquer trabalho de planeamento c
    - Pastas `tasks/`, `summaries/`, `metrics/` (com `.gitkeep`).
 4. Regista o pedido bruto do utilizador tal como recebido (sem reformular) em `implementation-log/<YYYY-MM>.md`, sob um cabeçalho "## Pedido inicial".
 5. Atualiza o `state.json` de projeto: define `active_plan` para o id do plano novo e adiciona-o ao registo `plans[]` (id, nome/slug, `status: "in-progress"`, timestamps).
-6. Devolve ao Loop Development um resumo estruturado do pedido: objetivo, contexto conhecido, tecnologias mencionadas, id do plano criado, e qualquer restrição explícita — sem inventar detalhes que o utilizador não deu.
+6. **Ligação ao projeto maior:** se existir um `.loop-development/` num ancestral (main) ou em subdiretórios (children), corre `npx loop-development link` via bash para ligar automaticamente. O comando é idempotente: deteta o main, regista o `parent` no `state.json` deste projeto e o próprio projeto no `children[]` do main, e concede acesso externo à raiz do main no `opencode.json`. Se o comando não existir ou falhar, ignora e continua (a ligação pode ser feita depois com `npx loop-development link`).
+7. Devolve ao Loop Development um resumo estruturado do pedido: objetivo, contexto conhecido, tecnologias mencionadas, id do plano criado, e qualquer restrição explícita — sem inventar detalhes que o utilizador não deu.
 
 Nunca avances para análise de ambiguidades ou planeamento — isso é responsabilidade de outros subagents.

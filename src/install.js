@@ -7,6 +7,7 @@ import { mergeConfigFile, computeObsoleteCleanup } from "./merge-config.js";
 import { loadManifest, saveManifest } from "./manifest.js";
 import { buildAgentsMd, findPreset } from "./presets.js";
 import { PROJECT_GRANT_MAP, PROJECT_EDIT_AGENTS } from "./constants.js";
+import { link } from "./link.js";
 
 export const PKG_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 export const ASSETS_DIR = join(PKG_ROOT, "opencode");
@@ -139,7 +140,7 @@ export async function installGlobal({ configDir, force = false, dryRun = false, 
   return { configDir: dir, copied: results.copied, existed: results.existed, merged: mergeResult.changed, configRemoved: mergeResult.removed, manifest: updatedManifest };
 }
 
-export async function installProject({ targetDir = process.cwd(), force = false, dryRun = false, log = () => {}, backend = null, frontend = null, pm = null } = {}) {
+export async function installProject({ targetDir = process.cwd(), force = false, dryRun = false, log = () => {}, backend = null, frontend = null, pm = null, noLink = false } = {}) {
   await mkdir(targetDir, { recursive: true });
   const templatesDir = join(ASSETS_DIR, "templates");
   const results = { copied: 0, existed: 0 };
@@ -193,6 +194,15 @@ export async function installProject({ targetDir = process.cwd(), force = false,
   const gitignore = await ensureGitignoreEntry(targetDir, ".loop-development/session-titles.json", { dryRun });
   if (gitignore.changed && !dryRun) {
     log(".gitignore: adicionado .loop-development/session-titles.json (estado local do plugin)");
+  }
+
+  // M003: deteção e ligação automática da hierarquia main/child.
+  if (!noLink) {
+    const linkResult = await link({ projectDir: targetDir, dryRun, log });
+    if (linkResult.parent) log(`ligado ao main: ${linkResult.parent.path}`);
+    if (linkResult.parentCleared) log("ligação com um main anterior removida (main já não é válido)");
+    if (linkResult.parentChildrenAdded) log(`registado no main: ${linkResult.parentChildrenAdded}`);
+    if (linkResult.childrenAdded.length > 0) log(`children ligados: ${linkResult.childrenAdded.join(", ")}`);
   }
 
   log(`\nProjeto preparado em ${targetDir}`);
