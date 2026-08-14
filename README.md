@@ -91,6 +91,8 @@ Depois **revisa o `AGENTS.md`** — é isto que dá ao Verifier e ao Test Writer
 | `loop-development models` | Audita os modelos dos agentes instalados contra o catálogo models.dev. |
 | `loop-development migrate [<dir>]` | Converte um projeto do formato antigo (`.loop-development/` flat) para a estrutura por planos. |
 | `loop-development architecture check [<dir>]` | Audita `.loop-development/architecture.md` contra o contrato de conteúdo (read-only; exit 0 limpo, 1 com violações). |
+| `loop-development secrets check [<dir>] [--history]` | Audita valores sensíveis de variáveis de ambiente em ficheiros versionados e, com `--history`, no histórico git (read-only; exit 0 limpo, 1 com achados de alta confiança). |
+| `loop-development secrets purge [<dir>] [--tool filter-repo\|filter-branch]` | Reescreve o histórico git para remover ficheiros com segredos (requer confirmação; `--dry-run` lista sem alterar). |
 | `loop-development allow add <caminho>` | Autoriza uma pasta fora do projeto (grava no `opencode.json` via `external_directory`). |
 | `loop-development allow remove <caminho>` | Retira a autorização de uma pasta externa. |
 | `loop-development allow list` | Lista as pastas externas autorizadas. |
@@ -174,6 +176,14 @@ Quando existe apenas um plano, o formato antigo (flat) é convertido automaticam
 ### Contrato de conteúdo do `architecture.md`
 
 O `architecture.md` é a **base estrutural geral** do projeto, não um log da implementação. Pertencem-lhe: stack e versões, regras/convenções de codificação, estrutura de pastas de alto nível e decisões de arquitetura transversais. **Nunca** devem constar: fase do projeto/roadmap, funções específicas de features, justificações tipo "porque é MVP", migrações/scripts SQL de tarefas ou listas de implementações — esses detalhes vivem em `plans/<id>/` e no `implementation-log/`. O Planner Writer faz **poda incondicional** ao atualizar o ficheiro (remove o que viola o contrato antes de adicionar, idempotente), e o Final Reviewer valida o resultado. Podes auditar qualquer projeto (mesmo sem correr um plano) com `loop-development architecture check`.
+
+### Segredos e variáveis de ambiente
+
+Os agentes **nunca** documentam valores reais de variáveis de ambiente (chaves, tokens, senhas, connection strings) — apenas o **nome** e **onde** está configurada; `.env.example` usa placeholders. O `init --project` garante que `.env`/`.env.*` estão no `.gitignore`. Para auditar um projeto (working tree ou histórico git), usa `loop-development secrets check [--history]`; se um segredo já estiver commitado, `loop-development secrets purge` reescreve o histórico com `git filter-repo` (requer confirmação e, depois, **rotação** do segredo). Padrões adicionais por projeto: `.loop-development/secret-patterns.jsonc`.
+
+### Verificação por tarefa vs verificação final
+
+Cada tarefa corre apenas a verificação leve: testes **afetados** + typecheck + lint + prettier. O **build** e a **suite completa** (incluindo o gate de cobertura) correm uma única vez na **verificação final do plano**, antes do Final Reviewer, com loop de correção. A matriz é configurável em `.loop-development/state.json` → `verification: { per_task: [...], final: [...] }`.
 
 ## Modelos e camadas (tiers)
 

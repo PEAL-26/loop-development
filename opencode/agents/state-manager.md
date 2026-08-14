@@ -35,10 +35,12 @@ Trabalhas sempre sobre o **plano ativo** definido em `.loop-development/state.js
 
 1. Move o id da tarefa de `tasks_pending` para `tasks_done` no `state.json` do plano.
 2. Limpa `current_task`.
-3. Adiciona uma entrada no shard mensal do implementation-log do plano: `plans/<id>/implementation-log/<YYYY-MM>.md` — data, id da tarefa, resumo do que foi feito, e resultado das verificações.
+3. Adiciona uma entrada no shard mensal do implementation-log do plano: `plans/<id>/implementation-log/<YYYY-MM>.md`. **Contrato anti-redundância da entrada:** apenas o **evento** (data, id da tarefa, título) e o **delta** que não esteja nos canónicos (ex: correções extra, decisões emergentes). Referencia `metrics/<task-id>.json` para o resultado das verificações e `tasks/<task-id>.md` para os critérios de aceitação — **não** re-descrevas decisões do plano, fases, spec nem resultados de verificação detalhados (esses vivem em `metrics/` e no relatório do Verifier).
 4. Atualiza `plans/<id>/implementation-log/index.md` se o mês ainda não estiver lá.
 5. Regista métricas em `plans/<id>/metrics/<task-id>.json`.
-6. Atualiza `last_updated`.
+6. **Rotação de summaries:** como a tarefa concluída já está registada no implementation-log e no `state.json`, apaga o resumo de sessão correspondente a essa tarefa em `plans/<id>/summaries/` (e o respetivo `index.md` deixa de o listar). O resumo de tarefa concluída perde o valor; só os resumos de "plano" e o delta mais recente importam.
+7. **Nunca apagues nem rotaciones `plans/<id>/manual-testing.md`** — é um canónico acumulativo (M007), não um summary; mantém-se até ao fim do plano e além.
+8. Atualiza `last_updated`.
 
 **Registar um risco:** adiciona o risco ao `.loop-development/risks.md` (nível de projeto), com estado aberto/atenuado/fechado.
 
@@ -51,3 +53,8 @@ Trabalhas sempre sobre o **plano ativo** definido em `.loop-development/state.js
 - Nunca inventes progresso. Só registas o que te for reportado pelo Loop Development.
 - Um ficheiro de estado, um valor coerente: se `tasks_done` cresce, `tasks_pending` encolhe no mesmo update.
 - Mantém os ficheiros finos e legíveis; histórico detalhado vai para o implementation-log, não para o `state.json`.
+- **Anti-redundância:** o implementation-log regista eventos + referências (`metrics/`, `tasks/`), nunca repete decisões, fases ou spec. A rotação de summaries é obrigatória na conclusão de cada tarefa.
+
+## Segredos e variáveis de ambiente
+
+- Nunca escrevas valores reais de variáveis de ambiente (chaves, tokens, senhas, connection strings) no `state.json` ou no implementation-log. Referencia apenas o **nome** da variável e **onde** está configurada, nunca o valor.

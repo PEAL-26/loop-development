@@ -68,3 +68,143 @@ test("final-reviewer verifica o contrato com o architecture check", async () => 
   assert.match(content, /architecture check/);
   assert.match(content, /exit code ≠ 0|exit code/);
 });
+
+test("compacter respeita o contrato anti-redundância dos resumos", async () => {
+  const content = await readAgent("compacter");
+
+  assert.match(content, /nunca repitas conteúdo|nunca o repete/i);
+  assert.match(content, /referencia/);
+  assert.match(content, /delta desde o anterior|delta/);
+  assert.match(content, /anterior:/);
+  assert.match(content, /index\.md/);
+  assert.match(content, /fonte única da verdade/i);
+});
+
+test("context-loader lê o resumo mais recente como contexto de retoma", async () => {
+  const content = await readAgent("context-loader");
+
+  assert.match(content, /summaries\/index\.md/);
+  assert.match(content, /resumo \*\*mais recente\*\*|mais recente/);
+  assert.match(content, /não são fonte de verdade|não é fonte de verdade/);
+});
+
+test("state-manager regista implementation-log enxuto e faz rotação de summaries", async () => {
+  const content = await readAgent("state-manager");
+
+  assert.match(content, /Rotação de summaries|rotação/);
+  assert.match(content, /metrics\/<task-id>\.json/);
+  assert.match(content, /não re-descrevas|sem repetir decisões|nunca repete decisões/i);
+});
+
+test("documentation-writer não duplica decisões no changelog nem nos ADRs", async () => {
+  const content = await readAgent("documentation-writer");
+
+  assert.match(content, /1 linha|1 linha do que mudou/);
+  assert.match(content, /Nunca dupliques|nunca dupliques/);
+  assert.match(content, /decisions\.md/);
+});
+
+test("planner-writer não duplica clarifications em decisions.md", async () => {
+  const content = await readAgent("planner-writer");
+
+  assert.match(content, /nunca duplica.*clarifications|não duplica.*clarifications/);
+  assert.match(content, /referencia as clarificações|referenciam as clarificações/);
+});
+
+test("final-reviewer reporta pendências de redundância em summaries/logs", async () => {
+  const content = await readAgent("final-reviewer");
+
+  assert.match(content, /Redundância/);
+  assert.match(content, /summaries/);
+  assert.match(content, /pendências acionáveis/);
+});
+
+test("agentes que escrevem ficheiros proíbem valores de env vars (M004)", async () => {
+  const writing = ["implementer", "documentation-writer", "planner-writer", "compacter", "state-manager", "test-writer", "refactorer"];
+  for (const name of writing) {
+    const content = await readAgent(name);
+    assert.match(content, /Segredos e variáveis de ambiente/, `${name} deve ter secção de segredos`);
+    assert.match(content, /nunca (escrevas|documentes) valores reais/i, `${name} deve proibir valores reais de env vars`);
+  }
+});
+
+test("security-auditor e final-reviewer usam o secrets check (M004)", async () => {
+  const sa = await readAgent("security-auditor");
+  assert.match(sa, /secrets check/);
+  assert.match(sa, /alta confiança/);
+  assert.match(sa, /bloqueante|bloquear/);
+  const fr = await readAgent("final-reviewer");
+  assert.match(fr, /secrets check/);
+  assert.match(fr, /alta confiança/);
+});
+
+test("verifier distingue modo tarefa e modo plano (M005)", async () => {
+  const content = await readAgent("verifier");
+  assert.match(content, /tarefa.*plano|plano.*tarefa/);
+  assert.match(content, /Modo tarefa/);
+  assert.match(content, /Modo plano/);
+  assert.match(content, /git diff HEAD/);
+  assert.match(content, /test-affected/);
+  assert.match(content, /per_task/);
+  assert.match(content, /`final`/);
+  assert.match(content, /Build/);
+  assert.match(content, /Cobertura mínima/);
+  assert.match(content, /min_coverage/);
+});
+
+test("orquestrador tem verificação final antes do Final Reviewer (M005)", async () => {
+  const content = await readAgent("loop-development");
+  assert.match(content, /Verificação final do plano/);
+  assert.match(content, /modo `plano`/);
+  assert.match(content, /testes afetados/);
+  assert.match(content, /Nunca.*build nem a suite completa/);
+  assert.match(content, /fix commits/);
+  assert.match(content, /sem amend nem rebase/);
+});
+
+test("final-reviewer não re-executa build nem suite completa (M005)", async () => {
+  const content = await readAgent("final-reviewer");
+  assert.match(content, /verificação final do plano/);
+  assert.match(content, /não re-executas/);
+});
+
+test("test-writer cria/atualiza o guia de teste manual (M007)", async () => {
+  const content = await readAgent("test-writer");
+
+  assert.match(content, /manual-testing\.md/);
+  assert.match(content, /Onde entrar/);
+  assert.match(content, /Passos/);
+  assert.match(content, /Configurações/);
+  assert.match(content, /Resultado esperado/);
+  assert.match(content, /Verificação via CLI\/API/);
+  assert.match(content, /Toda a tarefa tem secção/);
+  assert.match(content, /Sem teste manual/);
+  assert.match(content, /coberto por testes automatizados/);
+  assert.match(content, /tasks\/<task-id>\.md/);
+  assert.match(content, /Como executar o projeto/);
+});
+
+test("git-manager inclui o manual-testing.md no commit (M007)", async () => {
+  const content = await readAgent("git-manager");
+  assert.match(content, /manual-testing\.md/);
+});
+
+test("final-reviewer valida secções por tarefa no guia manual (M007)", async () => {
+  const content = await readAgent("final-reviewer");
+  assert.match(content, /Guia de teste manual/);
+  assert.match(content, /tasks_done/);
+  assert.match(content, /Onde entrar/);
+  assert.match(content, /bloqueantes/);
+});
+
+test("state-manager nunca apaga o manual-testing.md (M007)", async () => {
+  const content = await readAgent("state-manager");
+  assert.match(content, /manual-testing\.md/);
+  assert.match(content, /Nunca apagues/);
+});
+
+test("orquestrador aponta o guia manual no reporte final (M007)", async () => {
+  const content = await readAgent("loop-development");
+  assert.match(content, /Instruções de teste manual/);
+  assert.match(content, /manual-testing\.md/);
+});

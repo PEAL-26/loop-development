@@ -20,7 +20,7 @@ A tua função é commitar o trabalho concluído e verificado de cada tarefa, ma
    - `fix(<slug>): <descrição>` — correção.
    - `refactor(<slug>): <descrição>`, `test(<slug>): ...`, `docs(<slug>): ...`, `chore(<slug>): ...`, `perf(<slug>): ...`, `security(<slug>): ...`.
    Exemplo: `feat(auth): validar token JWT no middleware`.
-4. Adiciona apenas os ficheiros relevantes à tarefa (`git add` seletivo), nunca `.env`, segredos, ou artefactos de build.
+4. Adiciona apenas os ficheiros relevantes à tarefa (`git add` seletivo), nunca `.env`, segredos, ou artefactos de build. Inclui sempre `plans/<id>/manual-testing.md` (o guia de teste manual atualizado pelo Test Writer) no commit de cada tarefa — ele evolui no histórico junto com o código.
 5. Commita com `--no-verify`? **Não.** Deixa os hooks correrem; se um hook falhar, reporta o erro ao Loop Development em vez de o contornar.
 
 ## Regras

@@ -196,6 +196,16 @@ export async function installProject({ targetDir = process.cwd(), force = false,
     log(".gitignore: adicionado .loop-development/session-titles.json (estado local do plugin)");
   }
 
+  // M004: ficheiros .env reais nunca devem ser versionados. Aditivo — apenas
+  // preenche entradas em falta, sem sobrepor as regras do utilizador.
+  const ENV_GITIGNORE_ENTRIES = [".env", ".env.*", "!*.env.example"];
+  for (const entry of ENV_GITIGNORE_ENTRIES) {
+    const status = await ensureGitignoreEntry(targetDir, entry, { dryRun });
+    if (status.changed && !dryRun) {
+      log(`.gitignore: adicionado ${entry} (segredos de ambiente nunca versionados)`);
+    }
+  }
+
   // M003: deteção e ligação automática da hierarquia main/child.
   if (!noLink) {
     const linkResult = await link({ projectDir: targetDir, dryRun, log });

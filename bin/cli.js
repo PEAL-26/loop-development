@@ -13,6 +13,7 @@ import { BACKEND_PRESETS, FRONTEND_PRESETS, PACKAGE_MANAGERS, findPreset, detect
 import { telegramSetup, telegramStatus, telegramReset } from "../src/telegram.js";
 import { addAllowedFolder, removeAllowedFolder, listAllowedFolders, clearAllowedFolders } from "../src/access.js";
 import { link, unlink } from "../src/link.js";
+import { checkSecrets, purgeSecrets } from "../src/secrets.js";
 
 const USAGE = `loop-development — agente orquestrador global para o OpenCode
 
@@ -56,6 +57,16 @@ Uso:
       sinaliza, não altera nada. Exit code 0 se limpo, 1 com violações.
       (A poda real é feita pelo Planner Writer ao documentar cada plano.)
 
+  npx loop-development secrets check [<dir>] [--history]
+      Audita ficheiros versionados (e, com --history, o histórico git) à procura
+      de valores sensíveis de variáveis de ambiente (chaves, tokens, senhas).
+      Read-only; exit code 0 se limpo, 1 com achados de alta confiança.
+      Padrões adicionais configuráveis em .loop-development/secret-patterns.jsonc.
+  npx loop-development secrets purge [<dir>] [--tool filter-repo|filter-branch]
+      Reescreve o histórico git para remover ficheiros com segredos (requer
+      confirmação; git filter-repo recomendado). Nunca automático.
+      --dry-run lista os ficheiros afetados sem alterar nada.
+
   npx loop-development allow add <caminho> | remove <caminho> | list | clear
       Gere a lista de pastas externas permitidas (fora do diretório do projeto).
       Escreve permission.external_directory no opencode.json do projeto.
@@ -92,7 +103,7 @@ Opções:
   --help, -h           Mostra esta ajuda
   --version, -v        Mostra a versão`;
 function parseFlags(args) {
-  const flags = { yes: false, force: false, dryRun: false, configDir: null, project: false, help: false, version: false, backend: null, frontend: null, pm: null, listPresets: false, token: null, pairingKey: null, reset: false, noLink: false, modelAll: null, modelDefaults: false, modelTiers: {} };
+  const flags = { yes: false, force: false, dryRun: false, configDir: null, project: false, help: false, version: false, backend: null, frontend: null, pm: null, listPresets: false, token: null, pairingKey: null, reset: false, noLink: false, modelAll: null, modelDefaults: false, modelTiers: {}, history: false, tool: null };
   const rest = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -143,6 +154,13 @@ function parseFlags(args) {
         break;
       case "--no-link":
         flags.noLink = true;
+        break;
+      case "--history":
+        flags.history = true;
+        break;
+      case "--tool":
+        flags.tool = args[++i];
+        if (!flags.tool) throw new Error("--tool requer um valor");
         break;
       case "--all":
         flags.modelAll = args[++i];
@@ -384,6 +402,32 @@ async function runArchitecture(rest, flags) {
   return result.violations.length > 0 ? 1 : 0;
 }
 
+async function runSecrets(rest, flags) {
+  const sub = rest[1];
+  const targetDir = rest[2] ?? process.cwd();
+  try {
+    if (sub === "check") {
+      const result = await checkSecrets({ targetDir, history: flags.history, log: console.log });
+      if (result.notGit) return 0;
+      return result.high > 0 ? 1 : 0;
+    }
+    if (sub === "purge") {
+      const ok = await askConfirmation("Reescrever o histórico git para remover segredos?", { flags, dryRun: flags.dryRun });
+      if (!ok) {
+        console.log("Cancelado.");
+        return 1;
+      }
+      const result = await purgeSecrets({ targetDir, tool: flags.tool ?? "filter-repo", dryRun: flags.dryRun, log: console.log });
+      return result.purged || result.manual || result.files.length === 0 ? 0 : 1;
+    }
+    console.error(`loop-development: uso: secrets <check|purge>\n\n${USAGE}`);
+    return 1;
+  } catch (err) {
+    console.error(`erro: ${err.message}`);
+    return 1;
+  }
+}
+
 async function runTelegram(rest, flags) {
   const sub = rest[1];
   try {
@@ -532,6 +576,8 @@ async function main() {
         return await runMigrate(rest, flags);
       case "architecture":
         return await runArchitecture(rest, flags);
+      case "secrets":
+        return await runSecrets(rest, flags);
       case "telegram":
         return await runTelegram(rest, flags);
       case "allow":

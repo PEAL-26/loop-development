@@ -47,7 +47,7 @@ Criar um agente orquestrador capaz de conduzir todo o ciclo de desenvolvimento d
     - Implementa.
     - Refatora.
     - Gera/atualiza testes.
-    - Verifica: testes, typecheck, lint, prettier.
+    - Verifica (matriz por tarefa): testes afetados + typecheck, lint, prettier. Sem build e sem suite completa.
     - Auditoria de segurança.
     - Auditoria de performance.
     - Corrige até todas as verificações passarem.
@@ -56,8 +56,9 @@ Criar um agente orquestrador capaz de conduzir todo o ciclo de desenvolvimento d
     - Atualiza estado persistente.
     - Compacta a sessão.
 14. Repete até não existirem tarefas pendentes.
-15. Final Reviewer executa revisão global (incluindo validar o contrato de conteúdo de `architecture.md` via `loop-development architecture check`).
-16. Plano concluído: State Manager marca o plano `done` e limpa o `active_plan`.
+15. **Verificação final do plano**: o Verifier corre em modo plano (build + suite completa + cobertura mínima + typecheck + lint + prettier), com loop de correção (Implementer/Refactorer) até passar; as correções são commitadas como fix commits com o scope do plano (sem amend/rebase).
+16. Final Reviewer executa revisão global (incluindo validar o contrato de conteúdo de `architecture.md` via `loop-development architecture check` e o `secrets check`).
+17. Plano concluído: State Manager marca o plano `done` e limpa o `active_plan`.
 
 O comando `/loop-development-continue [<id>]` retoma o plano ativo (ou o id indicado, trocando o `active_plan` via State Manager) na fase onde ficou, sem repetir fases já concluídas nem re-pedir aprovações já concedidas.
 
@@ -66,7 +67,7 @@ O comando `/loop-development-continue [<id>]` retoma o plano ativo (ou o id indi
 Dois níveis, em `.loop-development/`:
 
 **Nível de projeto** (partilhado por todas as funcionalidades):
-- `state.json` — fino: `version`, `active_plan`, registo `plans[]`, configuração (`min_coverage`), e as ligações main/child (`parent` no child, `children[]` no main).
+- `state.json` — fino: `version`, `active_plan`, registo `plans[]`, configuração (`min_coverage`, `verification`), e as ligações main/child (`parent` no child, `children[]` no main).
 - `allowed-folders.json` — lista canónica de pastas externas autorizadas (`{ version: 1, folders: [{ path, addedAt, source }] }`).
 - `architecture.md`
 - `project-summary.md`
@@ -82,6 +83,7 @@ Dois níveis, em `.loop-development/`:
 - `tasks/` — uma tarefa por ficheiro (`001-<slug>.md`).
 - `summaries/` — resumos de sessão (Compacter).
 - `metrics/` — métricas por tarefa.
+- `manual-testing.md` — guia de teste manual acumulativo, atualizado pelo Test Writer a cada tarefa concluída (M007).
 
 O formato antigo (flat: `roadmap.md`, `tickets/`, etc.) é convertido por `npx loop-development migrate` para `plans/<timestamp>-projeto-inicial/`.
 
@@ -109,6 +111,15 @@ Quando um projeto vive dentro de outro, o Loop Development liga-os automaticamen
 - **Gatilhos**: `installProject` (automático, desativável com `--no-link`), subcomando `link` (reconcilia ligações stale), e Intake corre `npx loop-development link` em cada novo plano.
 - **Unlink**: `unlink <caminho>` remove a referência e os grants (consoante o papel: parent ou child).
 - **Status**: mostra `parent`/`children[]` e a contagem de pastas permitidas.
+
+### Proteção de segredos e variáveis de ambiente (M004)
+
+Os agentes nunca documentam **valores reais** de variáveis de ambiente — apenas o nome e onde está configurada; `.env.example` usa placeholders.
+
+- **Scanner interno** (`src/secrets.js`, zero dependências): padrões de alta/baixa confiança (tokens com prefixo, chaves privadas, pares `NOME_VAR=<valor tipo chave>`), com catálogo adicional por projeto em `.loop-development/secret-patterns.jsonc`.
+- **CLI**: `npx loop-development secrets check [<dir>] [--history]` audita ficheiros versionados e, com `--history`, o histórico git (read-only; exit 0 limpo, 1 com achados de alta confiança). `npx loop-development secrets purge` reescreve o histórico com `git filter-repo` (ou instruções `filter-branch`), sempre com confirmação — e lembra que o segredo deve ser **rotacionado**.
+- **Enforcement**: Security Auditor bloqueia tarefas com achados de alta confiança; Final Reviewer bloqueia o plano com achados no repositório todo/histórico.
+- **`.gitignore`**: o `installProject` garante `.env`/`.env.*` ignorados (aditivo); `secrets check` valida que `.env` não está versionado.
 
 ## Títulos de sessão
 
@@ -138,6 +149,7 @@ Antes de qualquer execução deve carregar automaticamente:
 - `architecture.md` e `risks.md` de projeto
 - `spec.md`, `state.json` e `decisions.md` do plano ativo
 - `implementation-log/` (index + shards relevantes ao histórico da tarefa)
+- `summaries/index.md` + o resumo mais recente (como **contexto de retoma**: delta e próximo passo; nunca substituem o `state.json` nem os canónicos)
 - tarefa atual (`plans/<id>/tasks/<task-id>.md`)
 - ficheiros afetados
 - contexto do main, se existir (`parent` em `state.json`): `architecture.md`, `state.json` e `project-summary.md` do main, **só leitura**
@@ -146,18 +158,20 @@ Antes de qualquer execução deve carregar automaticamente:
 
 Obrigatoriamente:
 - Implementação completa.
-- Testes aprovados.
-- Cobertura mínima (configurável, default 80).
+- Testes afetados aprovados (quando a stack permite testes direcionados; senão, adiados para a verificação final).
 - Typecheck sem erros.
 - Lint sem erros.
 - Prettier aplicado.
 - Auditoria de segurança aprovada.
 - Auditoria de performance aprovada.
 - Documentação atualizada.
+- `manual-testing.md` atualizado com a secção de teste manual da tarefa.
 - CHANGELOG atualizado (quando aplicável).
 - Estado persistido.
 - Sessão compactada.
 - Commit criado.
+
+A **verificação final do plano** (build + suite completa + cobertura mínima) é critério do plano, não de cada tarefa.
 
 ## Responsabilidades dos subagents
 
@@ -194,10 +208,11 @@ Obrigatoriamente:
 - Criar testes da tarefa
 
 ### Verifier
-- Tests
+- Tests (afetados por tarefa; suite completa no modo plano)
 - Typecheck
 - Lint
 - Prettier
+- Build (só no modo plano, verificação final)
 
 ### Security Auditor
 - SQL Injection
@@ -223,14 +238,18 @@ Obrigatoriamente:
 - API Docs
 - ADR (plans/<id>/decisions.md)
 - Spec do plano
+- Regra: nunca duplicar decisões — referencia `decisions.md`/`clarifications.md`
 
 ### State Manager
 - Atualiza progresso (projeto + plano ativo)
 - Guarda estado
-- Mantém o implementation-log
+- Mantém o implementation-log (evento + referências, sem repetir decisões/fases/verificação)
+- Rotação de summaries de tarefas concluídas
 
 ### Compacter
 - Resume contexto para reduzir consumo de tokens
+- Resumo = delta desde o anterior, com referências aos canónicos (anti-redundância)
+- Atualiza `summaries/index.md`
 
 ### Final Reviewer
 - Revisão final completa
@@ -241,6 +260,7 @@ Obrigatoriamente:
 - Documentação
 - Código morto
 - Dependências órfãs
+- Redundância em summaries/implementation-log (pendências acionáveis)
 
 ## CLI
 
@@ -250,6 +270,8 @@ Obrigatoriamente:
 - `npx loop-development status` — estado da instalação + planos/tarefas.
 - `npx loop-development migrate [<dir>]` — converte formato antigo para a estrutura por planos.
 - `npx loop-development architecture check [<dir>]` — audita `architecture.md` contra o contrato de conteúdo (read-only; exit code 0 limpo, 1 com violações).
+- `npx loop-development secrets check [<dir>] [--history]` — audita valores sensíveis de variáveis de ambiente em ficheiros versionados e no histórico git (read-only; exit code 0 limpo, 1 com achados de alta confiança).
+- `npx loop-development secrets purge [<dir>] [--tool filter-repo|filter-branch]` — reescreve o histórico para remover ficheiros com segredos (com confirmação; `--dry-run` lista sem alterar).
 - `npx loop-development allow add|remove|list|clear <caminho>` — gestão de pastas externas autorizadas (`external_directory`).
 - `npx loop-development link [<dir>]` — liga o projeto ao main, regista children e reconcilia ligações stale.
 - `npx loop-development unlink <caminho>` — remove a ligação main/child (estado + grants).

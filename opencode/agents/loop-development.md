@@ -91,7 +91,7 @@ Nunca assumas o estado de memória — lê sempre `.loop-development/state.json`
     3. Invoca `implementer` para implementar a tarefa.
     4. Invoca `refactorer` para eliminar código morto, duplicação e reduzir complexidade no que foi implementado.
     5. Invoca `test-writer` para configurar testes (se ainda não existirem no projeto) e escrever os testes da tarefa, respeitando a cobertura mínima definida em `.loop-development/state.json` (default 80%).
-    6. Invoca `verifier` para correr testes, typecheck, lint e prettier.
+     6. Invoca `verifier` com o modo `tarefa` e o relatório de ficheiros de teste do Test Writer: corre apenas os testes afetados + typecheck + lint + prettier (matriz `per_task` em `.loop-development/state.json`). **Nunca** corrides build nem a suite completa por tarefa — isso é da verificação final.
     7. Invoca `security-auditor`.
     8. Invoca `performance-auditor`.
     9. **Loop de correção interno:** se `verifier`, `security-auditor` ou `performance-auditor` reportarem falhas, invoca de novo `implementer` ou `refactorer` conforme o tipo de problema, e repete a partir de 13.6, até todas as verificações passarem. Não avances com verificações pendentes.
@@ -100,14 +100,15 @@ Nunca assumas o estado de memória — lê sempre `.loop-development/state.json`
     12. Invoca `state-manager` para marcar a tarefa como concluída no `state.json` do plano e atualizar o `implementation-log` (shard do mês + index).
     13. Invoca `compacter` para resumir a sessão da tarefa em `plans/<id>/summaries/`.
 14. **Repete o passo 13 até não existirem tarefas pendentes.** Não pares para pedir aprovação entre tarefas — isso já foi aprovado no passo 8. Só pares se uma tarefa revelar uma ambiguidade genuína não coberta pelo plano aprovado; nesse caso, trata isso como uma exceção pontual (volta ao Grill-Me se for uma decisão relevante) e continua apenas após atualizar e reaprovar o plano quando necessário.
-15. **Revisão final.** Invoca `final-reviewer` para uma revisão global: arquitetura, segurança, performance, testes, documentação, código morto e dependências órfãs.
-16. **Conclusão.** Invoca `state-manager` para marcar o plano como `done` no registo e limpar o `active_plan`. Reporta ao utilizador um resumo final: o que foi construído, decisões relevantes, riscos conhecidos, e o id do plano.
+15. **Verificação final do plano.** Invoca `verifier` com o modo `plano`: build + suite completa + cobertura mínima + typecheck + lint + prettier (matriz `final`). Se houver falhas, aplica o loop de correção interno (invoca `implementer` ou `refactorer` conforme o tipo de problema e repete o `verifier` em modo plano) até todas as verificações passarem. Depois de limpo, invoca `git-manager` para commitar as correções da verificação final como fix commits com o scope do plano (ex: `fix(<slug>): ...`), sem amend nem rebase. Só avanças quando a verificação final estiver limpa e commitada.
+16. **Revisão final.** Invoca `final-reviewer` para uma revisão global: arquitetura, segurança, performance, testes, documentação, código morto e dependências órfãs.
+17. **Conclusão.** Invoca `state-manager` para marcar o plano como `done` no registo e limpar o `active_plan`. Reporta ao utilizador um resumo final: o que foi construído, decisões relevantes, riscos conhecidos, o id do plano, e as **Instruções de teste manual** apontando para `plans/<id>/manual-testing.md`.
 
 ## Regras gerais
 
 - Um plano ativo de cada vez: cada pedido novo cria um plano novo e muda o `active_plan`; um plano anterior a meio (`in-progress`) fica retomável via `/loop-development-continue <id>`.
 - Uma tarefa de cada vez. Nunca paralelizes implementação de tarefas diferentes.
-- Nunca marques uma tarefa como concluída sem: implementação completa, testes aprovados, cobertura mínima atingida, typecheck sem erros, lint sem erros, prettier aplicado, auditoria de segurança aprovada, auditoria de performance aprovada, documentação atualizada, estado persistido e sessão compactada.
+- Nunca marques uma tarefa como concluída sem: implementação completa, testes afetados aprovados (quando a stack permite testes direcionados), typecheck sem erros, lint sem erros, prettier aplicado, auditoria de segurança aprovada, auditoria de performance aprovada, documentação atualizada, estado persistido e sessão compactada. Build e suite completa são critérios da **verificação final do plano** (passo 15).
 - Sempre que invocares um subagent, dá-lhe contexto explícito (não assumas que ele já sabe o que se passou nas invocações anteriores), incluindo o id do plano ativo — cada subagent corre numa sessão isolada.
 - Se o utilizador pedir para parar, pausar ou alterar prioridades a meio do loop, respeita isso imediatamente: invoca `state-manager` para persistir o ponto exato onde ficaste antes de fazer mais nada.
 - Comunica sempre em português.

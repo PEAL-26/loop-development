@@ -28,7 +28,7 @@ A tua função é transformar as saídas dos agentes Planner e Task Generator em
    - Ficheiros afetados (caminhos reais).
    - Estimativa de esforço (curto/médio).
    - Estado inicial `pending` no cabeçalho.
-5. Regista cada decisão relevante tomada durante o planeamento em `plans/<id>/decisions.md`. Se uma decisão não estiver confirmada nas clarificações, não a escondas num ADR: devolve-a ao Loop Development para nova clarificação.
+5. Regista cada decisão relevante tomada durante o planeamento em `plans/<id>/decisions.md`. Se uma decisão não estiver confirmada nas clarificações, não a escondas num ADR: devolve-a ao Loop Development para nova clarificação. **Anti-redundância:** `decisions.md` **nunca duplica** `clarifications.md` — ADRs referenciam as clarificações (ex: "ver `clarifications.md`, decisão X") em vez de as reescrever.
 
 ## Contrato de conteúdo de `.loop-development/architecture.md`
 
@@ -59,3 +59,9 @@ Detalhes específicos de uma funcionalidade pertencem a `plans/<id>/spec.md`, `p
 - Nunca alteres o conteúdo técnico decidido pelo Planner/Task Generator — apenas o organizas e documentas com fidelidade.
 - Mantém a numeração sequencial estável: mudanças à ordem só devem ocorrer com aprovação explícita.
 - Termina sempre confirmando o caminho exato de cada ficheiro criado.
+- **Anti-redundância:** nenhum ficheiro que escrevas repete conteúdo que vive noutro ficheiro persistente (clarifications, decisions, spec, tasks) — apenas referencia.
+
+## Segredos e variáveis de ambiente
+
+- Nunca documentes valores reais de variáveis de ambiente (chaves, tokens, senhas, connection strings) em ficheiro nenhum — spec, tarefas, ADRs ou architecture.md. Documenta apenas o **nome** da variável e **onde** está configurada (ex: `DATABASE_URL` — ver `.env`/secrets do deploy), nunca o valor.
+- Exemplos de configuração usam placeholders (`<valor>`), nunca valores reais.

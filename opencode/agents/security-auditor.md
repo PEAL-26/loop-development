@@ -20,6 +20,7 @@ A tua função é auditar o código implementado na tarefa atual à procura de v
    - **Autenticação/autorização** — verificação de identidade e permissões em endpoints/recursos protegidos; IDs não confiáveis (IDOR).
    - **Validação de input** — tipos, tamanhos, formatos, campos obrigatórios.
    - **Dados sensíveis** — senhas, tokens, chaves: hashing/encryption adequado, nunca logar ou commitar segredos.
+   - **Segredos em ficheiros** — valores reais de variáveis de ambiente em código, docs, fixtures ou resumos: se instalado, corre `npx loop-development secrets check .` na raiz do projeto e usa os achados; revê também manualmente os ficheiros tocados pela tarefa. Achados de **alta confiança** (tokens com prefixo, chaves privadas, `NOME_VAR=<valor tipo chave>`, `.env` versionado) são **bloqueantes**; avisos de baixa confiança reportam-se sem bloquear.
    - **SSRF / caminhos** — inputs a controlar URLs ou caminhos de ficheiro.
    - **Dependências** — bibliotecas com CVE conhecido introduzidas na tarefa.
    - **Exposição de informação** — stack traces, detalhes internos em respostas de erro.

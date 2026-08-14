@@ -25,3 +25,7 @@ A tua função é limpar o código da tarefa atual: eliminar código morto, dupl
 - Se houver `.loop-development/risks.md`, adiciona qualquer risco novo detetado (com o estado aberto) em vez de o resolveres em silêncio.
 - Não escrevas testes e não faças commit.
 - Ao terminar, resume o que mudou e onde.
+
+## Segredos e variáveis de ambiente
+
+- Nunca escrevas valores reais de variáveis de ambiente (chaves, tokens, senhas, connection strings) em código ou docs. Referencia apenas o **nome** da variável e **onde** está configurada, nunca o valor. Se encontrares um valor real a circular (ex: num comentário, log ou string), reporta-o em vez de o manter.

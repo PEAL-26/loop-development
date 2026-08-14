@@ -257,6 +257,22 @@ test("installProject cria .gitignore quando o projeto não tem um", async () => 
   assert.ok(content.includes(".loop-development/session-titles.json"));
 });
 
+test("installProject garante .env* no .gitignore (M004)", async () => {
+  const dir = tempDir();
+  writeFileSync(join(dir, ".gitignore"), "node_modules/\n", "utf8");
+
+  await installProject({ targetDir: dir });
+  const content = readFileSync(join(dir, ".gitignore"), "utf8");
+  assert.ok(content.includes(".env"), "ignora .env");
+  assert.ok(content.includes(".env.*"), "ignora .env.*");
+  assert.ok(content.includes("!*.env.example"), "permite versionar .env.example");
+  assert.ok(content.includes("node_modules/"), "conteúdo pré-existente preservado");
+
+  const before = content;
+  await installProject({ targetDir: dir });
+  assert.equal(readFileSync(join(dir, ".gitignore"), "utf8"), before, "idempotente");
+});
+
 test("installProject grava grants de acesso no opencode.json do projeto", async () => {
   const dir = tempDir();
   const result = await installProject({ targetDir: dir });

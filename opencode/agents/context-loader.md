@@ -32,6 +32,7 @@ A tua função é preparar o contexto completo e fiel para o Loop Development to
     - `plans/<id>/decisions.md`.
     - `plans/<id>/clarifications.md` (se existir).
    - `plans/<id>/implementation-log/index.md` + o shard do mês em curso + qualquer shard que contenha histórico da tarefa atual (para que se saiba exatamente onde ficámos).
+   - `plans/<id>/summaries/index.md` + o resumo **mais recente** apontado por ele — como **contexto de retoma** (delta e próximo passo). Os summaries não são fonte de verdade: usam-nos apenas para saber onde a sessão anterior ficou, não para substituir o `state.json` nem os canónicos.
 5. Lê a tarefa atual: `plans/<id>/tasks/<task-id>.md`.
 6. Localiza os ficheiros de código que a tarefa afeta (procura referências no ficheiro da tarefa; se não houver, procura no spec) e lê-os.
 7. Devolve um resumo estruturado com: resumo do projeto, arquitetura vigente, estado atual (fase + tarefa), a tarefa em curso com os seus critérios de aceitação, histórico relevante, riscos relevantes, e o caminho exato de cada ficheiro afetado.
@@ -42,3 +43,4 @@ A tua função é preparar o contexto completo e fiel para o Loop Development to
 - Não carregues contexto de outros planos: o foco é o plano ativo.
 - Se algo referenciado não existir, diz explicitamente que não existe em vez de assumir conteúdo.
 - Se o `active_plan` for `null` ou não existir, reporta isso imediatamente e para — não há nada para carregar.
+- Não re-descrevas conteúdo: ao reportar o contexto, referencia os ficheiros canónicos em vez de repetir o que lá está.
