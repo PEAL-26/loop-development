@@ -92,6 +92,7 @@ Depois **revisa o `AGENTS.md`** — é isto que dá ao Verifier e ao Test Writer
 | `loop-development set-model --defaults` | Restaura os modelos default de todos os tiers. |
 | `loop-development models` | Audita os modelos dos agentes instalados contra o catálogo models.dev. |
 | `loop-development migrate [<dir>]` | Converte um projeto do formato antigo (`.loop-development/` flat) para a estrutura por planos. |
+| `loop-development architecture check [<dir>]` | Audita `.loop-development/architecture.md` contra o contrato de conteúdo (read-only; exit 0 limpo, 1 com violações). |
 | `loop-development telegram setup` | Configura o bot do Telegram para aprovações remotas de permissões e respostas a perguntas. |
 | `loop-development telegram status` | Mostra o estado da configuração do Telegram (token, chave de emparelhamento, chats autorizados). |
 | `loop-development telegram reset` | Remove a configuração do Telegram. |
@@ -165,6 +166,10 @@ A memória do Loop Development vive em `.loop-development/`, separada em dois n�
 - `metrics/` — métricas por tarefa (`<task-id>.json`).
 
 Quando existe apenas um plano, o formato antigo (flat) é convertido automaticamente na primeira invocação — ou manualmente com `npx loop-development migrate`.
+
+### Contrato de conteúdo do `architecture.md`
+
+O `architecture.md` é a **base estrutural geral** do projeto, não um log da implementação. Pertencem-lhe: stack e versões, regras/convenções de codificação, estrutura de pastas de alto nível e decisões de arquitetura transversais. **Nunca** devem constar: fase do projeto/roadmap, funções específicas de features, justificações tipo "porque é MVP", migrações/scripts SQL de tarefas ou listas de implementações — esses detalhes vivem em `plans/<id>/` e no `implementation-log/`. O Planner Writer faz **poda incondicional** ao atualizar o ficheiro (remove o que viola o contrato antes de adicionar, idempotente), e o Final Reviewer valida o resultado. Podes auditar qualquer projeto (mesmo sem correr um plano) com `loop-development architecture check`.
 
 ## Modelos e camadas (tiers)
 

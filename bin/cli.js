@@ -8,6 +8,7 @@ import { status } from "../src/status.js";
 import { DEFAULT_MODELS, TIERS, setModel, setModels } from "../src/set-model.js";
 import { auditInstalledModels } from "../src/models.js";
 import { migrateProject } from "../src/plan.js";
+import { checkArchitecture } from "../src/architecture.js";
 import { BACKEND_PRESETS, FRONTEND_PRESETS, PACKAGE_MANAGERS, findPreset, detectPackageManager, isValidPm } from "../src/presets.js";
 import { telegramSetup, telegramStatus, telegramReset } from "../src/telegram.js";
 
@@ -46,6 +47,12 @@ Uso:
   npx loop-development migrate [<dir>]
       Converte um projeto no formato antigo (.loop-development/ flat) para a
       estrutura nova por planos (plans/<timestamp>-projeto-inicial/).
+
+  npx loop-development architecture check [<dir>]
+      Audita .loop-development/architecture.md contra o contrato de arquitetura
+      (base estrutural geral, sem detalhes de features/implementação). Apenas
+      sinaliza, não altera nada. Exit code 0 se limpo, 1 com violações.
+      (A poda real é feita pelo Planner Writer ao documentar cada plano.)
 
   npx loop-development --list-presets
       Lista os presets de stack disponíveis.
@@ -349,6 +356,18 @@ async function runMigrate(rest, flags) {
   return 0;
 }
 
+async function runArchitecture(rest, flags) {
+  const sub = rest[1];
+  if (sub !== "check") {
+    console.error(`loop-development: uso: architecture check [<dir>]\n\n${USAGE}`);
+    return 1;
+  }
+  const targetDir = rest[2] ?? process.cwd();
+  const result = await checkArchitecture({ targetDir, log: console.log });
+  if (result.missing) return 0;
+  return result.violations.length > 0 ? 1 : 0;
+}
+
 async function runTelegram(rest, flags) {
   const sub = rest[1];
   try {
@@ -425,6 +444,8 @@ async function main() {
         return await runModels(flags);
       case "migrate":
         return await runMigrate(rest, flags);
+      case "architecture":
+        return await runArchitecture(rest, flags);
       case "telegram":
         return await runTelegram(rest, flags);
       default:

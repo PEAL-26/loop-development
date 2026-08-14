@@ -42,3 +42,29 @@ test("researcher e planner não assumem decisões relevantes", async () => {
   assert.match(planner, /Não assumes decisões relevantes/);
   assert.match(planner, /clarifications\.md/);
 });
+
+test("planner-writer aplica o contrato de conteúdo ao architecture.md", async () => {
+  const content = await readAgent("planner-writer");
+
+  assert.match(content, /base estrutural do projeto/);
+  assert.match(content, /Contrato de conteúdo/);
+  assert.match(content, /Não pertence/);
+  assert.match(content, /Pertence/);
+  assert.match(content, /MVP/);
+  assert.match(content, /fase do projeto|roadmap/);
+  assert.match(content, /migra|scripts SQL/);
+  assert.match(content, /Regra de poda/);
+  assert.match(content, /idempotente/);
+});
+
+test("documentation-writer nunca edita architecture.md", async () => {
+  const content = await readAgent("documentation-writer");
+  assert.match(content, /Nunca edites `\.loop-development\/architecture\.md`/);
+});
+
+test("final-reviewer verifica o contrato com o architecture check", async () => {
+  const content = await readAgent("final-reviewer");
+  assert.match(content, /contrato de conteúdo/);
+  assert.match(content, /architecture check/);
+  assert.match(content, /exit code ≠ 0|exit code/);
+});

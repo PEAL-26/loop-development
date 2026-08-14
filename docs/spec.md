@@ -34,7 +34,7 @@ Criar um agente orquestrador capaz de conduzir todo o ciclo de desenvolvimento d
 3. Researcher consulta documentação oficial. Se a pesquisa contradisser uma decisão confirmada, o fluxo regressa ao Grill-Me.
 4. Planner cria o plano.
 5. Architecture Reviewer valida a arquitetura.
-6. Planner Writer documenta o plano (`plans/<id>/spec.md` + `architecture.md` de projeto).
+6. Planner Writer documenta o plano (`plans/<id>/spec.md` + `architecture.md` de projeto). O `architecture.md` segue um **contrato de conteúdo**: é a base estrutural geral do projeto (stack, regras/convenções, estrutura de pastas, decisões transversais), nunca um log da implementação — sem fase do projeto, funções específicas de features, justificações MVP, migrações/scripts SQL de tarefas ou listas de tarefas. O Planner Writer faz poda incondicional ao atualizá-lo.
 7. Compacter resume a sessão.
 8. **PARAGEM OBRIGATÓRIA — aprovação do plano.** Esta aprovação inclui a decomposição normal em tarefas.
 9. Task Generator divide o trabalho em tarefas.
@@ -56,7 +56,7 @@ Criar um agente orquestrador capaz de conduzir todo o ciclo de desenvolvimento d
     - Atualiza estado persistente.
     - Compacta a sessão.
 14. Repete até não existirem tarefas pendentes.
-15. Final Reviewer executa revisão global.
+15. Final Reviewer executa revisão global (incluindo validar o contrato de conteúdo de `architecture.md` via `loop-development architecture check`).
 16. Plano concluído: State Manager marca o plano `done` e limpa o `active_plan`.
 
 O comando `/loop-development-continue [<id>]` retoma o plano ativo (ou o id indicado, trocando o `active_plan` via State Manager) na fase onde ficou, sem repetir fases já concluídas nem re-pedir aprovações já concedidas.
@@ -222,6 +222,7 @@ Obrigatoriamente:
 - `npx loop-development uninstall` — remoção limpa.
 - `npx loop-development status` — estado da instalação + planos/tarefas.
 - `npx loop-development migrate [<dir>]` — converte formato antigo para a estrutura por planos.
+- `npx loop-development architecture check [<dir>]` — audita `architecture.md` contra o contrato de conteúdo (read-only; exit code 0 limpo, 1 com violações).
 - `npx loop-development set-model <tier> <modelo>` — troca o modelo de uma camada (sintaxe compatível).
 - `npx loop-development set-model --<tier> <modelo> ...` — troca os modelos dos tiers indicados.
 - `npx loop-development set-model --all <modelo>` — troca o modelo de todos os tiers.

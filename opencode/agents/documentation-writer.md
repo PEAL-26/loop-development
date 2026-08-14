@@ -27,4 +27,5 @@ Para cada tarefa concluída, atualiza apenas o que for relevante:
 - Documenta só o que está implementado e verificado — nunca documentes funcionalidades planeadas mas não entregues.
 - Não recriar documentação que já existe e não mudou.
 - O `changelog.md` é de nível de projeto (partilhado por todos os planos).
+- **Nunca edites `.loop-development/architecture.md`** — o único responsável por esse ficheiro é o Planner Writer.
 - Confirma sempre o caminho e a natureza exata de cada alteração que fizeste.

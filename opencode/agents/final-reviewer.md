@@ -17,7 +17,7 @@ A tua função é executar uma revisão global e final antes de o plano ser dado
 1. Lê o plano ativo: `plans/<id>/spec.md`, `plans/<id>/decisions.md`, o histórico (`implementation-log/`) e o `.loop-development/architecture.md`.
 2. Verifica a entrega global:
    - **Plano vs. entrega** — cada fase/item da spec foi implementado? Cada tarefa tem testes e passou verificações?
-   - **Arquitetura** — o que foi implementado respeita a arquitetura aprovada? Existem violações ou dívida acumulada?
+   - **Arquitetura** — o que foi implementado respeita a arquitetura aprovada? Existem violações ou dívida acumulada? O `architecture.md` respeita o **contrato de conteúdo** (base estrutural geral, não log de implementação — sem fase do projeto, funções específicas de features, justificações MVP, migrações/scripts SQL de tarefas ou listas de implementações)? Corre `loop-development architecture check` na raiz do projeto como evidência objetiva; se devolver exit code ≠ 0, reporta as violações como pendências.
    - **Segurança** — rever padrões sensíveis de todo o plano (autenticação, input, segredos).
    - **Performance** — padrões problemáticos globais (N+1, cache ausente, payloads).
    - **Testes** — cobertura global cumpre o mínimo? Testes realmente verificam comportamento?
