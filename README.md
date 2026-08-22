@@ -88,6 +88,7 @@ Depois **revisa o `AGENTS.md`** — é isto que dá ao Verifier e ao Test Writer
 | `loop-development set-model --<tier> <modelo> ...` | Troca os modelos dos tiers indicados. |
 | `loop-development set-model --all <modelo>` | Troca o modelo de todos os agentes de todos os tiers. |
 | `loop-development set-model --defaults` | Restaura os modelos default de todos os tiers. |
+| `loop-development set-mode <simple\|complete>` | Define o modo de execução default do projeto (`default_mode` no `.loop-development/state.json`). Afeta apenas planos novos. |
 | `loop-development models` | Audita os modelos dos agentes instalados contra o catálogo models.dev. |
 | `loop-development migrate [<dir>]` | Converte um projeto do formato antigo (`.loop-development/` flat) para a estrutura por planos. |
 | `loop-development architecture check [<dir>]` | Audita `.loop-development/architecture.md` contra o contrato de conteúdo (read-only; exit 0 limpo, 1 com violações). |
@@ -113,6 +114,12 @@ Opções comuns: `--yes` (não confirmar), `--force` (sobrescrever existentes), 
 
 ```
 /loop-development Cria uma todo list web em React + Vite + Tailwind: adicionar, concluir, editar e remover tarefas, filtros (todas/ativas/concluídas), persistência em localStorage, tema claro/escuro e design limpo e responsivo.
+```
+
+**Opção A2, modo simple (poupa contexto/tokens):**
+
+```
+/loop-development-simples Cria uma todo list web em React + Vite + Tailwind: adicionar, concluir, editar e remover tarefas.
 ```
 
 **Opção B, agente primário (Tab):**
@@ -144,9 +151,43 @@ Lê `.loop-development/state.json`, retoma o plano ativo (ou o plano indicado co
 5. Task Generator divide o plano em tarefas; a aprovação do plano aprova automaticamente essa decomposição.
 6. A lista de tarefas é apresentada apenas como resumo informativo. Se não houver desvios ao plano, a execução começa automaticamente.
 7. A partir daqui, o loop corre **sozinho**, tarefa a tarefa: implementa, refatora, escreve testes, corre verificações (testes/typecheck/lint/prettier/segurança/performance), corrige até tudo passar, documenta, faz commit, persiste estado, sem te voltar a interromper entre tarefas, a não ser que surja uma ambiguidade genuína fora do que foi aprovado.
-8. No fim, Final Reviewer faz uma revisão global e o Loop Development reporta um resumo final.
+8. No fim, Final Reviewer faz uma revisão global e o Loop Development reporta um resumo final. (No modo `simple` não há Final Reviewer nem passos por tarefa além de implementar e persistir estado — toda a verificação acontece no fim do plano; ver *Modos de execução*.)
 
 > **Sobre o Grill-Me:** no fluxo, o `grill-me` executado é o **agente do pacote**, invocado pelo orquestrador via Task (e também acessível com `@grill-me`). É independente de qualquer skill do utilizador com o mesmo nome — o agente tem acesso à tool `skill` negado, pelo que as instruções dele vêm sempre do pacote, não de skills instaladas (ex: `~/.agents/skills/grill-me/`).
+
+## Modos de execução
+
+Existem exatamente dois modos fixos, pensados para controlar quanto contexto/tokens cada plano consome:
+
+- **`complete`** (default) — o fluxo integral: research, revisão de arquitetura, compaction e, por tarefa: context loader, dependency auditor, refactorer, test writer, verifier, auditores de segurança/performance, documentation writer, git manager e compacter; no fim, final reviewer.
+- **`simple`** — fluxo enxuto para planos gratuitos ou funcionalidades pequenas: Grill-Me completo → planeamento → aprovação → implementação tarefa a tarefa (só implementer + state-manager) → no fim do plano, test writer uma única vez + verificação final completa (build, suite, cobertura, typecheck, lint, prettier) com loop de correção → commit único do plano.
+
+| Passo | `complete` | `simple` |
+|---|---|---|
+| Intake + Grill-Me (incluindo pesquisas direcionadas) | ✅ | ✅ |
+| Research autónomo + Architecture Reviewer | ✅ | ❌ |
+| Compacter | ✅ | ❌ |
+| Aprovação do plano (paragem obrigatória) | ✅ | ✅ |
+| Por tarefa: Context Loader, Dependency Auditor, Refactorer, Test Writer, Verifier, Security/Performance Auditor, Documentation Writer, Git Manager, Compacter | ✅ | ❌ |
+| Por tarefa: Implementer + State Manager | ✅ | ✅ |
+| No fim: Test Writer (plano inteiro) | ❌ (já correu por tarefa) | ✅ |
+| Verificação final do plano (Verifier modo plano, com cobertura mínima) | ✅ | ✅ |
+| Git Manager no fim (commit único) | ❌ (commits por tarefa) | ✅ |
+| Final Reviewer | ✅ | ❌ |
+
+Regras dos modos:
+
+- O modo fica gravado no campo `mode` do `state.json` do plano à criação e é **imutável** — `/loop-development-continue` retoma sempre com o modo gravado.
+- O default para planos novos vem de `default_mode` no `.loop-development/state.json` (`complete` se ausente). Muda-o sem editar ficheiros:
+
+```bash
+npx loop-development set-mode simple      # ou complete
+npx loop-development set-mode simple --dry-run
+```
+
+- `set-mode` só afeta **planos novos**; o plano ativo mantém o modo com que foi criado.
+- Para usar o modo simple num pedido pontual sem mudar o default, usa o comando `/loop-development-simples <pedido>`.
+- A única paragem obrigatória em ambos os modos é a aprovação do plano. Promover um plano `simple` a `complete` a meio só acontece com a tua aprovação explícita.
 
 ## Estado persistente (por planos)
 
@@ -154,7 +195,7 @@ A memória do Loop Development vive em `.loop-development/`, separada em dois n�
 
 **Nível de projeto** (partilhado por todas as funcionalidades):
 
-- `state.json` — fino: plano ativo (`active_plan`), registo dos planos (`plans[]` com id/nome/estado) e configuração (`min_coverage`).
+- `state.json` — fino: plano ativo (`active_plan`), registo dos planos (`plans[]` com id/nome/estado) e configuração (`min_coverage`, `default_mode`).
 - `project-summary.md` — resumo vivo do que o projeto é e faz.
 - `architecture.md` — decisões de arquitetura validadas.
 - `changelog.md` — changelog do projeto.

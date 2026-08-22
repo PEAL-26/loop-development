@@ -208,3 +208,49 @@ test("orquestrador aponta o guia manual no reporte final (M007)", async () => {
   assert.match(content, /Instruções de teste manual/);
   assert.match(content, /manual-testing\.md/);
 });
+
+test("orquestrador define os dois modos de execução com tabela explícita", async () => {
+  const content = await readAgent("loop-development");
+
+  assert.match(content, /Modos de execução/);
+  assert.match(content, /`complete`/);
+  assert.match(content, /`simple`/);
+  assert.match(content, /congelado à criação do plano/i);
+  assert.match(content, /Planos sem o campo `mode` são tratados como `complete`/);
+  assert.match(content, /default_mode/);
+  assert.match(content, /nunca mudes o modo .* por iniciativa própria|nunca mudes o `mode` de um plano em curso/i);
+  // Modo simple: por tarefa só implementer + state-manager
+  assert.match(content, /13\.3 e 13\.12/);
+  assert.match(content, /único gate de qualidade/);
+  assert.match(content, /commitar todo o plano agora verificado/);
+  // Grill-Me completo em ambos os modos, incluindo needs_research
+  assert.match(content, /Corre por inteiro em ambos os modos/);
+  assert.match(content, /\(isto vale também no modo `simple`\)/);
+});
+
+test("comando loop-development-simples existe e fixa o modo simple", async () => {
+  const content = await readFile(join(PKG_ROOT, "opencode", "commands", "loop-development-simples.md"), "utf8");
+  assert.match(content, /modo `simple`/);
+  assert.match(content, /mode: "simple"/);
+  assert.match(content, /agent: loop-development/);
+});
+
+test("continue respeita o modo gravado no plano", async () => {
+  const content = await readFile(join(PKG_ROOT, "opencode", "commands", "loop-development-continue.md"), "utf8");
+  assert.match(content, /`mode` gravado no plano retomado/);
+  assert.match(content, /não mudes de modo na retoma/);
+});
+
+test("intake grava o modo do plano à criação e default_mode no esqueleto do projeto", async () => {
+  const content = await readAgent("intake");
+  assert.match(content, /"default_mode": "complete"/);
+  assert.match(content, /\*\*Modo do plano \(`mode`\):\*\*/);
+  assert.match(content, /O modo é imutável depois disto/i);
+});
+
+test("state-manager trata o modo como imutável e omite métricas no simple", async () => {
+  const content = await readAgent("state-manager");
+  assert.match(content, /`mode` — o modo de execução do plano/);
+  assert.match(content, /imutável/i);
+  assert.match(content, /No modo `simple`, omite este passo/);
+});

@@ -14,14 +14,15 @@ permission:
 A tua função é preparar o terreno antes de qualquer trabalho de planeamento começar, mantendo um plano por funcionalidade.
 
 1. Verifica se a pasta `.loop-development/` existe na raiz do projeto. Se não existir, cria-a com o esqueleto de nível de projeto:
-   - `state.json` com `{"version": 2, "active_plan": null, "plans": [], "min_coverage": 80, "created_at": "<timestamp ISO>", "last_updated": "<timestamp ISO>"}`.
+   - `state.json` com `{"version": 2, "active_plan": null, "plans": [], "default_mode": "complete", "min_coverage": 80, "created_at": "<timestamp ISO>", "last_updated": "<timestamp ISO>"}`.
    - `project-summary.md`, `architecture.md`, `changelog.md`, `risks.md` (mínimos), e a pasta `plans/` (vazia).
 2. **Migração:** se o `state.json` existir mas estiver no formato antigo (flat — sem o campo `plans`), não inventes a migração: informa o Loop Development que é preciso correr `npx loop-development migrate` antes de continuar.
 3. **Cria a pasta do plano da funcionalidade** em `plans/<timestamp>-<slug>/`, onde:
    - `<timestamp>` = data e hora atuais no formato `YYYYMMDD.HHMM` (ex: `20260808.2246`).
    - `<slug>` = derivado do pedido bruto: kebab-case, só caracteres alfanuméricos, até ~40 chars (ex: `20260808.2246-login-google`).
    Dentro da pasta, cria o esqueleto:
-   - `state.json` — estado inicial com `phase: "intake"`, `grill_status: null`, `pending_question: null`, `pending_research: null`, `current_task: null`, `tasks_done: []`, `tasks_pending: []`, `tasks_approved_at: null`, `tasks_approval_source: null` e `last_updated`.
+   - `state.json` — estado inicial com `phase: "intake"`, `mode` (ver abaixo), `grill_status: null`, `pending_question: null`, `pending_research: null`, `current_task: null`, `tasks_done: []`, `tasks_pending: []`, `tasks_approved_at: null`, `tasks_approval_source: null` e `last_updated`.
+   - **Modo do plano (`mode`):** se o Loop Development indicar um modo na invocação (ex: pedido vindo de `/loop-development-simples`), grava esse valor (`"simple"` ou `"complete"`). Caso contrário, lê o `default_mode` do `state.json` de projeto (se existir; senão `"complete"`) e grava-o. O modo é imutável depois disto — nunca o alteres em atualizações seguintes.
    - `spec.md` (cabeçalho mínimo), `decisions.md` (cabeçalho mínimo), `clarifications.md` (cabeçalho mínimo).
    - `implementation-log/index.md` e `implementation-log/<YYYY-MM>.md` (mês atual).
    - Pastas `tasks/`, `summaries/`, `metrics/` (com `.gitkeep`).

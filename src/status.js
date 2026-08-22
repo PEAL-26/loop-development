@@ -42,6 +42,7 @@ export async function getStatus({ configDir, projectDir = process.cwd() } = {}) 
         activePlan: state.active_plan ?? null,
         plans: Array.isArray(state.plans) ? state.plans : [],
         minCoverage: state.min_coverage ?? null,
+        defaultMode: state.default_mode === "simple" ? "simple" : "complete",
         version: state.version ?? null,
         parent: state.parent ?? null,
         children: Array.isArray(state.children) ? state.children : [],
@@ -69,6 +70,7 @@ export async function getStatus({ configDir, projectDir = process.cwd() } = {}) 
         const s = JSON.parse(await readFile(planStateFile, "utf8"));
         activePlanState = {
           phase: s.phase ?? "desconhecida",
+          mode: s.mode === "simple" ? "simple" : "complete",
           currentTask: s.current_task ?? null,
           tasksDone: Array.isArray(s.tasks_done) ? s.tasks_done.length : 0,
           tasksPending: Array.isArray(s.tasks_pending) ? s.tasks_pending.length : 0,
@@ -112,13 +114,16 @@ export async function status(opts) {
     if (!data.activePlanState) {
       return `Projeto: plano ativo "${data.projectState.activePlan}" sem state.json (corre 'npx loop-development migrate' se estiveres num formato antigo)`;
     }
-    const parts = [`plano ativo "${data.projectState.activePlan}"`, `fase "${data.activePlanState.phase}"`];
+    const parts = [`plano ativo "${data.projectState.activePlan}"`, `fase "${data.activePlanState.phase}"`, `modo "${data.activePlanState.mode}"`];
     if (data.activePlanState.currentTask) parts.push(`tarefa em curso: ${data.activePlanState.currentTask}`);
     parts.push(`${data.activePlanState.tasksDone} tarefas concluídas`);
     parts.push(`${data.activePlanState.tasksPending} pendentes`);
     return `Projeto: ${parts.join("; ")}`;
   })();
   lines.push(planLine);
+  if (data.projectState && data.projectState !== "erro de leitura") {
+    lines.push(`Modo de execução default (planos novos): ${data.projectState.defaultMode} — muda com 'npx loop-development set-mode <simple|complete>'`);
+  }
 
   if (data.projectState && data.projectState !== "erro de leitura") {
     const parts = [];

@@ -56,6 +56,12 @@ export function detectLegacyLayout(targetDir) {
   return !state || state.version !== 2;
 }
 
+export const EXECUTION_MODES = ["simple", "complete"];
+
+export function isValidMode(value) {
+  return value === "simple" || value === "complete";
+}
+
 function readJsonSync(file) {
   try {
     return JSON.parse(readFileSync(file, "utf8"));
@@ -69,6 +75,7 @@ async function writeScaffoldPlan(dir, date, log) {
   const shard = currentMonthShard(date);
   const planState = {
     phase: "intake",
+    mode: "complete",
     grill_status: null,
     pending_question: null,
     pending_research: null,
@@ -120,6 +127,7 @@ async function ensureProjectState(targetDir, legacyState, planIdValue, date) {
       }
     ],
     min_coverage: legacyState?.min_coverage ?? 80,
+    default_mode: isValidMode(legacyState?.default_mode) ? legacyState.default_mode : "complete",
     created_at: legacyState?.created_at ?? date.toISOString(),
     last_updated: date.toISOString()
   };

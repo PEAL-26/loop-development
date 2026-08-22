@@ -22,6 +22,7 @@ Trabalhas sempre sobre o **plano ativo** definido em `.loop-development/state.js
 **Atualizar o estado do plano (`plans/<id>/state.json`):**
 
 - `phase` — a fase do fluxo (ex: `intake`, `plan`, `tasks`, `execute`, `done`).
+- `mode` — o modo de execução do plano (`"simple"` ou `"complete"`). Gravado pelo Intake à criação do plano e **imutável**: nunca o alteres nem o removas em atualizações seguintes; planos antigos sem este campo são tratados como `complete`.
 - `grill_status` — estado da entrevista (`question`, `needs_research`, `resolved`, `blocked`) quando `phase` é `grill`.
 - `pending_question` / `pending_research` — pendência atual do Grill-Me, quando existir.
 - `current_task` — id da tarefa em curso (`001-<slug>` ou `null`).
@@ -37,14 +38,14 @@ Trabalhas sempre sobre o **plano ativo** definido em `.loop-development/state.js
 2. Limpa `current_task`.
 3. Adiciona uma entrada no shard mensal do implementation-log do plano: `plans/<id>/implementation-log/<YYYY-MM>.md`. **Contrato anti-redundância da entrada:** apenas o **evento** (data, id da tarefa, título) e o **delta** que não esteja nos canónicos (ex: correções extra, decisões emergentes). Referencia `metrics/<task-id>.json` para o resultado das verificações e `tasks/<task-id>.md` para os critérios de aceitação — **não** re-descrevas decisões do plano, fases, spec nem resultados de verificação detalhados (esses vivem em `metrics/` e no relatório do Verifier).
 4. Atualiza `plans/<id>/implementation-log/index.md` se o mês ainda não estiver lá.
-5. Regista métricas em `plans/<id>/metrics/<task-id>.json`.
-6. **Rotação de summaries:** como a tarefa concluída já está registada no implementation-log e no `state.json`, apaga o resumo de sessão correspondente a essa tarefa em `plans/<id>/summaries/` (e o respetivo `index.md` deixa de o listar). O resumo de tarefa concluída perde o valor; só os resumos de "plano" e o delta mais recente importam.
+5. Regista métricas em `plans/<id>/metrics/<task-id>.json`. **No modo `simple`, omite este passo** — não há relatórios de verifier/auditores por tarefa nesse modo.
+6. **Rotação de summaries:** como a tarefa concluída já está registada no implementation-log e no `state.json`, apaga o resumo de sessão correspondente a essa tarefa em `plans/<id>/summaries/` (e o respetivo `index.md` deixa de o listar). O resumo de tarefa concluída perde o valor; só os resumos de "plano" e o delta mais recente importam. No modo `simple` não há summaries (o Compacter não corre) — nada a rodar.
 7. **Nunca apagues nem rotaciones `plans/<id>/manual-testing.md`** — é um canónico acumulativo (M007), não um summary; mantém-se até ao fim do plano e além.
 8. Atualiza `last_updated`.
 
 **Registar um risco:** adiciona o risco ao `.loop-development/risks.md` (nível de projeto), com estado aberto/atenuado/fechado.
 
-**Concluir o plano:** quando não restam tarefas pendentes e o `final-reviewer` aprovou, atualiza o registo do plano em `.loop-development/state.json` (`status: "done"`), limpa `active_plan` (para `null`) e atualiza `last_updated`.
+**Concluir o plano:** quando não restam tarefas pendentes e a verificação final do plano estiver limpa (e, no modo `complete`, o `final-reviewer` tiver aprovado), atualiza o registo do plano em `.loop-development/state.json` (`status: "done"`), limpa `active_plan` (para `null`) e atualiza `last_updated`.
 
 **Aprovar tarefas derivadas do plano:** depois de o plano ser aprovado e o Task Generator criar as tarefas, verifica que não existe alteração de escopo nem decisão nova. Regista `tasks_approved_at` e `tasks_approval_source: "plan-approval"`, limpa pendências de aprovação e muda a fase para `execute`. Se houver divergência, não aproves as tarefas: volta ao Grill-Me/Planner para rever o plano.
 

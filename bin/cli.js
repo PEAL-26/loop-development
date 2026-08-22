@@ -14,6 +14,7 @@ import { telegramSetup, telegramStatus, telegramReset } from "../src/telegram.js
 import { addAllowedFolder, removeAllowedFolder, listAllowedFolders, clearAllowedFolders } from "../src/access.js";
 import { link, unlink } from "../src/link.js";
 import { checkSecrets, purgeSecrets } from "../src/secrets.js";
+import { setMode, isValidMode } from "../src/set-mode.js";
 
 const USAGE = `loop-development — agente orquestrador global para o OpenCode
 
@@ -46,6 +47,11 @@ Uso:
   npx loop-development models [--config-dir <dir>]
       Audita os modelos configurados nos agentes instalados contra o catálogo
       models.dev e reporta modelos deprecated ou inexistentes.
+
+  npx loop-development set-mode <simple|complete> [--dry-run]
+      Define o modo de execução default do projeto (default_mode no
+      .loop-development/state.json). Afeta apenas planos novos; o plano ativo
+      mantém o modo com que foi criado.
 
   npx loop-development migrate [<dir>]
       Converte um projeto no formato antigo (.loop-development/ flat) para a
@@ -526,6 +532,19 @@ async function runUnlink(rest, flags) {
   }
 }
 
+async function runSetMode(rest, flags) {
+  try {
+    const mode = rest[1];
+    if (!mode) throw new Error("uso: loop-development set-mode <simple|complete>");
+    if (!isValidMode(mode)) throw new Error(`modo inválido "${mode}" — usa "simple" ou "complete"`);
+    await setMode(mode, { projectDir: process.cwd(), dryRun: flags.dryRun, log: console.log });
+    return 0;
+  } catch (err) {
+    console.error(`erro: ${err.message}`);
+    return 1;
+  }
+}
+
 async function main() {
   const args = argv.slice(2);
   if (args.length === 0) {
@@ -570,6 +589,8 @@ async function main() {
         return 0;
       case "set-model":
         return await runSetModel(rest, flags);
+      case "set-mode":
+        return await runSetMode(rest, flags);
       case "models":
         return await runModels(flags);
       case "migrate":

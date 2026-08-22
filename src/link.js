@@ -90,6 +90,7 @@ export function defaultState(projectDir) {
     version: 2,
     active_plan: null,
     plans: [],
+    default_mode: "complete",
     min_coverage: 80,
     created_at: new Date().toISOString(),
     last_updated: new Date().toISOString()
