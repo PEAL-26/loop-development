@@ -18,8 +18,7 @@
   "scripts": {
     "test": "node --test",
     "typecheck": "tsc -p tsconfig.json",
-    "doctor": "node bin/cli.js doctor",
-    "prepare": "node bin/ensure-deps.js"
+    "doctor": "node bin/cli.js doctor"
   },
   "keywords": [
     "opencode",
