@@ -3,10 +3,22 @@ description: Valida o plano ou a implementação contra princípios SOLID, Clean
 mode: subagent
 model: opencode/big-pickle
 # tier: reasoning
-temperature: 0.1
-permission:
-  edit: deny
-  webfetch: deny
+request:
+  body:
+    temperature: 0.1
+permissions:
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: webfetch
+    resource: "*"
+    effect: deny
+  - action: read
+    resource: ".loop-development/**"
+    effect: allow
+  - action: glob
+    resource: ".loop-development/**"
+    effect: allow
 ---
 
 # Architecture Reviewer

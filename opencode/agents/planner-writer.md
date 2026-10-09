@@ -3,10 +3,25 @@ description: Documenta formalmente o plano aprovado e as tarefas geradas nos fic
 mode: subagent
 model: opencode/ling-3.0-tiny-free
 # tier: docs
-temperature: 0.2
-permission:
-  edit: allow
-  webfetch: deny
+request:
+  body:
+    temperature: 0.2
+permissions:
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: webfetch
+    resource: "*"
+    effect: deny
+  - action: read
+    resource: ".loop-development/**"
+    effect: allow
+  - action: glob
+    resource: ".loop-development/**"
+    effect: allow
+  - action: edit
+    resource: ".loop-development/**"
+    effect: allow
 ---
 
 # Planner Writer

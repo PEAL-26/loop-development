@@ -1,12 +1,13 @@
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdir, cp, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, cp, readdir, readFile, writeFile, rename } from "node:fs/promises";
 import { existsSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { resolveConfigDir } from "./config-dir.js";
 import { mergeConfigFile, computeObsoleteCleanup } from "./merge-config.js";
-import { loadManifest, saveManifest } from "./manifest.js";
+import { loadManifest, saveManifest, ruleIdentity } from "./manifest.js";
 import { buildAgentsMd, findPreset } from "./presets.js";
-import { PROJECT_GRANT_MAP, PROJECT_EDIT_AGENTS } from "./constants.js";
+import { PROJECT_EDIT_AGENTS, PERMISSION_KEYS, projectGrantRules } from "./constants.js";
 import { link } from "./link.js";
 
 export const PKG_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -28,11 +29,36 @@ async function walk(dir, rel = "") {
   return entries;
 }
 
-async function copyFileIfNeeded(src, dst, force) {
-  if (!force && existsSync(dst)) return "exists";
-  await mkdir(dirname(dst), { recursive: true });
-  await cp(src, dst);
-  return "copied";
+async function hashFile(file) {
+  try {
+    return createHash("sha256").update(await readFile(file)).digest("hex");
+  } catch {
+    return null;
+  }
+}
+
+// Decide o que fazer com um ficheiro já presente na pasta de config.
+//
+// A política é conservadora de propósito. O `update` sem --force só substitui um
+// ficheiro quando consegue PROVAR que é uma versão nossa mais antiga (o hash
+// instalado bate certo com o que embarcámos da última vez). Se o utilizador o
+// tiver editado, não é tocado — sobrescrever um .md por iniciativa própria é
+// pior do que pedir-lhe uma confirmação. O --force é o opt-in explícito, e faz
+// backup do que substitui.
+export function resolveFileAction({ exists, force, shippedSha, installedSha, previousSha }) {
+  if (!exists) return "copy";
+  if (shippedSha != null && shippedSha === installedSha) return "skip";
+  if (force) return "refresh";
+  if (installedSha == null) return "refresh";
+  if (previousSha != null && previousSha === installedSha) return "refresh";
+  return "modified";
+}
+
+async function backupFile(file) {
+  const base = `${file}.bak-loop-development`;
+  const target = existsSync(base) ? `${base}.${Date.now()}` : base;
+  await rename(file, target);
+  return target;
 }
 
 async function writeFileIfNeeded(dst, content, force) {
@@ -76,71 +102,144 @@ export async function installGlobal({ configDir, force = false, dryRun = false, 
   const pkg = await readPackageJson();
   const manifest = await loadManifest(dir);
 
-  const files = [];
-  const results = { copied: 0, existed: 0 };
+  const previousByPath = new Map((manifest.files ?? []).map((f) => [f.path, f]));
+  const shippedEntries = new Map();
+  const results = { copied: 0, skipped: 0, refreshed: 0, modified: [] };
 
   for (const sub of DIRS_TO_COPY) {
     const srcDir = join(ASSETS_DIR, sub);
     if (!existsSync(srcDir)) continue;
     for (const rel of await walk(srcDir)) {
       const relPath = join(sub, rel);
-      files.push(relPath);
+      const src = join(srcDir, rel);
       const dst = join(dir, relPath);
-      const status = dryRun
-        ? !force && existsSync(dst) ? "exists" : "copied"
-        : await copyFileIfNeeded(join(srcDir, rel), dst, force);
-      if (status === "copied") {
-        results.copied += 1;
-        log(`copiado: ${relPath}`);
-      } else {
-        results.existed += 1;
+      const shippedSha = await hashFile(src);
+      shippedEntries.set(relPath, { path: relPath, sha256: shippedSha, shippedIn: pkg.version });
+      const installedSha = existsSync(dst) ? await hashFile(dst) : null;
+      const action = resolveFileAction({
+        exists: existsSync(dst),
+        force,
+        shippedSha,
+        installedSha,
+        previousSha: previousByPath.get(relPath)?.sha256 ?? null,
+      });
+
+      if (action === "skip") {
+        results.skipped += 1;
+        continue;
       }
+      if (action === "modified") {
+        results.modified.push(relPath);
+        log(`inalterado (editado localmente): ${relPath}`);
+        continue;
+      }
+      if (dryRun) {
+        results.copied += 1;
+        log(`(dry-run) ${action === "refresh" ? "actualizar" : "copiar"}: ${relPath}`);
+        continue;
+      }
+      if (action === "refresh" && existsSync(dst)) {
+        const backup = await backupFile(dst);
+        log(`backup de ${relPath} em ${backup}`);
+      }
+      await mkdir(dirname(dst), { recursive: true });
+      await cp(src, dst);
+      results.copied += 1;
+      log(`${action === "refresh" ? "actualizado" : "copiado"}: ${relPath}`);
     }
   }
 
   const baseConfig = JSON.parse(await readFile(join(ASSETS_DIR, "opencode.json"), "utf8"));
-  // Migração: remove chaves bash per-agent que o installer adicionava em versões
-  // antigas (tracked no manifest) e o artefacto inválido agent.permission.
-  const removePaths = [...computeObsoleteCleanup(manifest), "agent.permission"];
-  const mergeResult = await mergeConfigFile(dir, baseConfig, { dryRun, removePaths });
+  const mergeResult = await mergeConfigFile(dir, baseConfig, {
+    dryRun,
+    mode: "managed",
+    removeRules: computeObsoleteCleanup(manifest),
+  });
   if (mergeResult.changed && !dryRun) {
     const details = [];
-    if (mergeResult.added.length > 0) details.push(`${mergeResult.added.length} permissão(ões) adicionada(s)`);
+    if (mergeResult.added.length > 0) details.push(`${mergeResult.added.length} regra(s) adicionada(s)`);
     if (mergeResult.removed.length > 0) details.push(`${mergeResult.removed.length} entrada(s) obsoleta(s) removida(s)`);
+    if (mergeResult.report.length > 0) details.push(`migração V1→V2: ${mergeResult.report.join("; ")}`);
     log(`config: ${mergeResult.backup ? `backup em ${mergeResult.backup}` : "criado"} — ${details.join(", ")}`);
+  }
+  for (const conflict of mergeResult.conflicts ?? []) {
+    log(
+      `conflito: a tua regra ${conflict.action} "${conflict.resource}" = ${conflict.kept} (${conflict.scope.agent ?? "global"}) foi mantida; a nossa seria ${conflict.ours}`,
+    );
   }
 
   const updatedManifest = {
     ...manifest,
+    manifestVersion: 2,
     version: pkg.version,
     installedAt: manifest.installedAt ?? new Date().toISOString(),
-    files: uniqueBy([...(manifest.files ?? []), ...files], (f) => f),
+    files: mergeFileEntries(manifest, shippedEntries),
     configFile: mergeResult.file ?? manifest.configFile,
     configAdded: uniqueBy(
-      [...(manifest.configAdded ?? []), ...mergeResult.added],
-      (a) => `${a.path}.${a.key}`
+      [...(manifest.configAdded ?? []), ...mergeResult.added.map(toRuleEntry)],
+      ruleIdentity,
     ),
-    configManaged: uniqueBy(
-      [...(manifest.configManaged ?? []), ...mergeResult.managed],
-      (a) => `${a.path}.${a.key}`
-    ),
-    configRemoved: uniqueBy(
-      [...(manifest.configRemoved ?? []), ...mergeResult.removed],
-      (a) => a
-    )
+    configConflicts: mergeResult.conflicts ?? [],
+    configRemoved: uniqueBy([...(manifest.configRemoved ?? []), ...mergeResult.removed], (a) => a),
   };
 
   if (!dryRun) await saveManifest(dir, updatedManifest);
 
   log(`\nLoop Development instalado em ${dir}`);
-  log(`Arquivos: ${results.copied} copiados, ${results.existed} já existiam`);
+  log(
+    `Arquivos: ${results.copied} escritos, ${results.skipped} já actualizados` +
+      (results.modified.length > 0 ? `, ${results.modified.length} inalterados por edição local` : ""),
+  );
+  if (results.modified.length > 0) {
+    log(
+      `Ficheiros editados localmente não foram sobrescritos. Para os substituir, corre 'loop-development update --force' (faz backup).`,
+    );
+  }
   log("Reinicia o OpenCode para que os agentes e comandos fiquem disponíveis.");
   if (dryRun) log("(--dry-run: nada foi alterado)");
 
-  return { configDir: dir, copied: results.copied, existed: results.existed, merged: mergeResult.changed, configRemoved: mergeResult.removed, manifest: updatedManifest };
+  return {
+    configDir: dir,
+    copied: results.copied,
+    skipped: results.skipped,
+    modified: results.modified,
+    merged: mergeResult.changed,
+    configRemoved: mergeResult.removed,
+    conflicts: mergeResult.conflicts ?? [],
+    manifest: updatedManifest,
+  };
 }
 
-export async function installProject({ targetDir = process.cwd(), force = false, dryRun = false, log = () => {}, backend = null, frontend = null, pm = null, noLink = false } = {}) {
+function toRuleEntry(entry) {
+  return {
+    legacy: false,
+    agent: entry.scope?.agent ?? null,
+    action: entry.action,
+    resource: entry.resource,
+    effect: entry.effect,
+  };
+}
+
+// Depois de instalar, o manifest guarda o hash do que foi EMBARCADO (não o que
+// está em disco), para o próximo update poder distinguir "instalado por nós" de
+// "editado pelo utilizador".
+function mergeFileEntries(manifest, shippedEntries) {
+  const entries = new Map();
+  for (const entry of manifest.files ?? []) entries.set(entry.path, { ...entry });
+  for (const [path, entry] of shippedEntries) entries.set(path, entry);
+  return [...entries.values()];
+}
+
+export async function installProject({
+  targetDir = process.cwd(),
+  force = false,
+  dryRun = false,
+  log = () => {},
+  backend = null,
+  frontend = null,
+  pm = null,
+  noLink = false,
+} = {}) {
   await mkdir(targetDir, { recursive: true });
   const templatesDir = join(ASSETS_DIR, "templates");
   const results = { copied: 0, existed: 0 };
@@ -154,7 +253,9 @@ export async function installProject({ targetDir = process.cwd(), force = false,
     : await readFile(join(templatesDir, "AGENTS.md.template"), "utf8");
 
   const agentsStatus = dryRun
-    ? !force && existsSync(join(targetDir, "AGENTS.md")) ? "exists" : "copied"
+    ? !force && existsSync(join(targetDir, "AGENTS.md"))
+      ? "exists"
+      : "copied"
     : await writeFileIfNeeded(join(targetDir, "AGENTS.md"), agentsContent, force);
   if (agentsStatus === "copied") {
     results.copied += 1;
@@ -167,7 +268,9 @@ export async function installProject({ targetDir = process.cwd(), force = false,
     if (rel === "AGENTS.md.template") continue;
     const dst = join(targetDir, rel);
     const status = dryRun
-      ? !force && existsSync(dst) ? "exists" : "copied"
+      ? !force && existsSync(dst)
+        ? "exists"
+        : "copied"
       : await copyFileIfNeeded(join(templatesDir, rel), dst, force);
     if (status === "copied") {
       results.copied += 1;
@@ -177,30 +280,27 @@ export async function installProject({ targetDir = process.cwd(), force = false,
     }
   }
 
-  // Grants de acesso ao projeto: permissões aditivas no opencode.json da raiz.
-  // read/glob em allow para todos os agentes (com exceções .env), edit em allow
-  // apenas para os agentes que escrevem ficheiros. Nunca sobrepõe regras do
-  // utilizador — só preenche as chaves que ainda não existirem.
+  // Grants de acesso ao projeto: regras aditivas de read/glob (allow) no
+  // opencode.json da raiz, com as excepções .env, e edit apenas para os agentes
+  // que escrevem ficheiros. Nunca sobrepõe uma regra que o utilizador já tenha.
   const projectGrants = buildProjectGrants();
-  const configMerge = await mergeConfigFile(targetDir, projectGrants, { dryRun, additiveOnly: true });
+  const configMerge = await mergeConfigFile(targetDir, projectGrants, { dryRun, mode: "project" });
   if (configMerge.changed && !dryRun) {
-    const configInfo = configMerge.added.length > 0
-      ? `${configMerge.added.length} permissão(ões) de acesso ao projeto adicionada(s)`
-      : "grants de acesso ao projeto aplicados";
+    const configInfo =
+      configMerge.added.length > 0
+        ? `${configMerge.added.length} regra(s) de acesso ao projeto adicionada(s)`
+        : "grants de acesso ao projeto aplicados";
     log(`config: ${configMerge.backup ? `backup em ${configMerge.backup}` : "criado"} — ${configInfo}`);
-  }
-
-  // Estado do plugin de títulos de sessão é por-máquina: não deve ser versionado.
-  const gitignore = await ensureGitignoreEntry(targetDir, ".loop-development/session-titles.json", { dryRun });
-  if (gitignore.changed && !dryRun) {
-    log(".gitignore: adicionado .loop-development/session-titles.json (estado local do plugin)");
   }
 
   // M004: ficheiros .env reais nunca devem ser versionados. Aditivo — apenas
   // preenche entradas em falta, sem sobrepor as regras do utilizador.
-  const ENV_GITIGNORE_ENTRIES = [".env", ".env.*", "!*.env.example"];
-  for (const entry of ENV_GITIGNORE_ENTRIES) {
+  // Nota: a antiga entrada `.loop-development/session-titles.json` deixou de ser
+  // escrita — em V2 o estado do session-title vive em `ctx.storage`.
+  let gitignore = false;
+  for (const entry of [".env", ".env.*", "!*.env.example"]) {
     const status = await ensureGitignoreEntry(targetDir, entry, { dryRun });
+    if (status.changed) gitignore = true;
     if (status.changed && !dryRun) {
       log(`.gitignore: adicionado ${entry} (segredos de ambiente nunca versionados)`);
     }
@@ -225,22 +325,38 @@ export async function installProject({ targetDir = process.cwd(), force = false,
   log("Para o estado persistente ser usado, garante que .loop-development/ existe na raiz do projeto.");
   log("Na primeira invocação do loop, o Intake cria a pasta do plano da funcionalidade em .loop-development/plans/.");
 
-  return { targetDir, copied: results.copied, existed: results.existed, presets: withPresets, projectConfig: { merged: configMerge.changed, added: configMerge.added.length, backup: configMerge.backup }, gitignore: gitignore.changed };
+  return {
+    targetDir,
+    copied: results.copied,
+    existed: results.existed,
+    presets: withPresets,
+    gitignore,
+    projectConfig: { merged: configMerge.changed, added: configMerge.added.length, backup: configMerge.backup },
+  };
 }
 
-// Constrói o mapa de permissões por agente, com base nos agentes embarcados.
+async function copyFileIfNeeded(src, dst, force) {
+  if (!force && existsSync(dst)) return "exists";
+  await mkdir(dirname(dst), { recursive: true });
+  await cp(src, dst);
+  return "copied";
+}
+
+// Grants por agente como regras V2 ordenadas: "*" allow primeiro, excepções
+// .env depois (no V2 vale a última regra que casa).
 function buildProjectGrants() {
-  const grants = { agent: {} };
+  const grants = { agents: {} };
   for (const name of listAgentNames()) {
-    grants.agent[name] = { permission: { read: PROJECT_GRANT_MAP, glob: PROJECT_GRANT_MAP } };
-  }
-  for (const name of PROJECT_EDIT_AGENTS) {
-    if (grants.agent[name]) grants.agent[name].permission.edit = PROJECT_GRANT_MAP;
+    const rules = [];
+    for (const action of PERMISSION_KEYS) {
+      if (action === "edit" && !PROJECT_EDIT_AGENTS.includes(name)) continue;
+      rules.push(...projectGrantRules(action));
+    }
+    grants.agents[name] = { permissions: rules };
   }
   return grants;
 }
 
-// Nomes dos agentes embarcados (ficheiros *.md em opencode/agents/), ordenados.
 function listAgentNames() {
   const agentsDir = join(ASSETS_DIR, "agents");
   if (!existsSync(agentsDir)) return [];

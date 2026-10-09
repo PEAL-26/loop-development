@@ -1,6 +1,6 @@
 {
   "name": "loop-development",
-  "version": "0.8.0",
+  "version": "1.0.0",
   "description": "Agente orquestrador global para o OpenCode que conduz todo o ciclo de desenvolvimento de software de forma autónoma",
   "type": "module",
   "bin": {
@@ -16,7 +16,10 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "typecheck": "tsc -p tsconfig.json",
+    "doctor": "node bin/cli.js doctor",
+    "prepare": "node bin/ensure-deps.js"
   },
   "keywords": [
     "opencode",
@@ -28,8 +31,11 @@
   ],
   "license": "MIT",
   "devDependencies": {
+    "@opencode/plugin": "^2.0.0",
     "@semantic-release/changelog": "^7.0.0",
     "@semantic-release/git": "^11.0.1",
-    "semantic-release": "^24.0.0"
+    "@types/node": "^22.0.0",
+    "semantic-release": "^24.0.0",
+    "typescript": "^5.6.0"
   }
 }

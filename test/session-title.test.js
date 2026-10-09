@@ -11,8 +11,7 @@ import {
   isDefaultTitle,
   decideAction,
   emptyState,
-  parseState,
-  serializeState,
+  normalizeState,
   lastTitleFor,
   updateLastTitle,
 } from "../opencode/plugins/core/session-title-core.js";
@@ -139,19 +138,41 @@ test("decideAction mode never: só atua quando o título é default", () => {
   assert.equal(decideAction({ ...base, currentTitle: "Manual" }).reason, "manual");
 });
 
-test("estado: round-trip e atualizações", () => {
+// O estado passou de `.loop-development/session-titles.json` (parse/serialize de
+// texto) para `ctx.storage` (já vem deserializado). Continua a haver
+// normalização, mas é de objecto e nunca lança: um estado corrompido apenas
+// perde o histórico de títulos, que o plugin reconstrói sozinho.
+test("estado: normalizeState tolera lixo e mantém um estado válido", () => {
+  assert.deepEqual(normalizeState(undefined), emptyState());
+  assert.deepEqual(normalizeState(null), emptyState());
+  assert.deepEqual(normalizeState("lixo"), emptyState());
+  assert.deepEqual(normalizeState(42), emptyState());
+  assert.deepEqual(normalizeState({}), emptyState());
+  assert.deepEqual(normalizeState({ titles: "lixo" }), emptyState(), "titles tem de ser objecto");
+
+  const stored = { version: 1, titles: { ses_1: { title: "Login Google", plan: "login-google", updatedAt: 123 } } };
+  assert.deepEqual(normalizeState(stored), stored, "um estado válido passa intacto");
+
+  // O round-trip agora é com o que o storage devolve, não com texto.
+  const roundTrip = normalizeState(JSON.parse(JSON.stringify(stored)));
+  assert.equal(lastTitleFor(roundTrip, "ses_1"), "Login Google");
+  assert.equal(roundTrip.titles.ses_1.plan, "login-google");
+});
+
+test("estado: updateLastTitle regista e substitui títulos por sessão", () => {
   const s = emptyState();
-  assert.deepEqual(parseState("lixo"), emptyState());
+  assert.deepEqual(s, { version: 1, titles: {} });
 
   const updated = updateLastTitle(s, "ses_1", "Login Google", "login-google", 123);
   assert.equal(lastTitleFor(updated, "ses_1"), "Login Google");
   assert.equal(lastTitleFor(updated, "ses_2"), undefined);
-
-  const roundTrip = parseState(serializeState(updated));
-  assert.equal(lastTitleFor(roundTrip, "ses_1"), "Login Google");
-  assert.equal(roundTrip.titles.ses_1.plan, "login-google");
+  assert.equal(updated.titles.ses_1.plan, "login-google");
+  assert.equal(updated.titles.ses_1.updatedAt, 123);
 
   const again = updateLastTitle(updated, "ses_1", "Nova Feature", "nova-feature", 456);
   assert.equal(lastTitleFor(again, "ses_1"), "Nova Feature");
-  assert.equal(again.titles.ses_2, undefined);
+  assert.deepEqual(Object.keys(again.titles), ["ses_1"], "sem sessões fantasma");
+
+  // Normalizar o resultado volta a dar o mesmo estado (o storage vai buscá-lo).
+  assert.deepEqual(normalizeState(again), again);
 });

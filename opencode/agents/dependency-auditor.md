@@ -3,10 +3,22 @@ description: Audita compatibilidade, peer dependencies e versões recomendadas d
 mode: subagent
 model: opencode/deepseek-v4-flash-free
 # tier: mechanical
-temperature: 0.1
-permission:
-  edit: deny
-  webfetch: allow
+request:
+  body:
+    temperature: 0.1
+permissions:
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: webfetch
+    resource: "*"
+    effect: allow
+  - action: read
+    resource: ".loop-development/**"
+    effect: allow
+  - action: glob
+    resource: ".loop-development/**"
+    effect: allow
 ---
 
 # Dependency Auditor

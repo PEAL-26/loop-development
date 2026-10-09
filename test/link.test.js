@@ -14,7 +14,7 @@ import {
   defaultState
 } from "../src/link.js";
 import { toPosix } from "../src/access.js";
-import { findConfigFile, parseConfig, getPath } from "../src/merge-config.js";
+import { findConfigFile, parseConfig, readRules } from "../src/merge-config.js";
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), "ld-link-"));
@@ -33,6 +33,16 @@ function createProject(dir, { name = "proj" } = {}) {
 function readConfig(dir) {
   const file = findConfigFile(dir);
   return existsSync(file) ? parseConfig(readFileSync(file, "utf8")) : null;
+}
+
+// No V2 os grants do main no child são regras external_directory no array
+// `permissions` de topo do opencode.json do child.
+function externalRules(config) {
+  return readRules(config, { agent: null }).filter((r) => r?.action === "external_directory");
+}
+
+function externalEffect(config, resource) {
+  return externalRules(config).find((r) => r.resource === resource)?.effect;
 }
 
 function mkMonoRepo() {
@@ -119,9 +129,9 @@ test("link liga child ao main: estado, children[] do main e grants", async () =>
   assert.equal(mainState.children[0].path, toPosix(child));
 
   const config = readConfig(child);
-  const ed = getPath(config, "permission.external_directory");
-  assert.equal(ed[toPosix(main)], "allow");
-  assert.equal(ed[`${toPosix(main)}/**`], "allow");
+  assert.equal(externalEffect(config, toPosix(main)), "allow");
+  assert.equal(externalEffect(config, `${toPosix(main)}/**`), "allow");
+  assert.deepEqual(externalRules(config).map((r) => r.resource), [toPosix(main), `${toPosix(main)}/**`]);
 });
 
 test("link é idempotente", async () => {
@@ -222,7 +232,7 @@ test("unlink desliga o child do main (estado + grants)", async () => {
   assert.equal(mainState.children.length, 0, "main perde o child");
 
   const config = readConfig(child);
-  assert.equal(getPath(config, "permission.external_directory"), undefined, "grants removidos");
+  assert.deepEqual(externalRules(config), [], "grants removidos");
 });
 
 test("unlink do main desliga o child", async () => {

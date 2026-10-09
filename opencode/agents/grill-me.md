@@ -1,14 +1,28 @@
 ---
-name: grill-me
 description: Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. Use when user wants to stress-test a plan or mentions "grill me".
+name: grill-me
 mode: subagent
 model: opencode/big-pickle
 # tier: reasoning
-temperature: 0.3
-permission:
-  edit: deny
-  skill: deny
-  question: allow
+request:
+  body:
+    temperature: 0.3
+permissions:
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: skill
+    resource: "*"
+    effect: deny
+  - action: question
+    resource: "*"
+    effect: allow
+  - action: read
+    resource: ".loop-development/**"
+    effect: allow
+  - action: glob
+    resource: ".loop-development/**"
+    effect: allow
 ---
 
 Conduz uma entrevista iterativa e rigorosa sobre o pedido até existir entendimento partilhado. Faz uma pergunta de cada vez, resolve dependências entre decisões e reanalisa o pedido depois de cada resposta.

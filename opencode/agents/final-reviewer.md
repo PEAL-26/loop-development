@@ -3,11 +3,28 @@ description: Executa a revisão global final do projeto antes de o dar como conc
 mode: subagent
 model: opencode/big-pickle
 # tier: reasoning
-temperature: 0.2
-permission:
-  read: allow
-  edit: deny
-  webfetch: deny
+request:
+  body:
+    temperature: 0.2
+permissions:
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: webfetch
+    resource: "*"
+    effect: deny
+  - action: read
+    resource: ".loop-development/**"
+    effect: allow
+  - action: glob
+    resource: ".loop-development/**"
+    effect: allow
+  - action: edit
+    resource: ".loop-development/**"
+    effect: allow
 ---
 
 # Final Reviewer

@@ -5,7 +5,13 @@ Agente orquestrador global para o OpenCode que conduz todo o ciclo de desenvolvi
 ## Requisitos
 
 - Node.js ≥ 18
-- [OpenCode](https://opencode.ai/) instalado
+- [OpenCode](https://opencode.ai/) **≥ v2.0** instalado
+
+> **V2 obrigatório.** O Loop Development usa a API de permissões por regras ordenadas
+> (`permissions: [{ action, resource, effect }]`), `agents.<id>.permissions` e plugins com
+> **default export** `{ id, setup }`. Nada disto existe no V1 — onde os plugins, por sinal,
+> nunca carregavam. O comando `loop-development doctor` verifica a versão instalada e falha
+> se ainda for V1.
 
 ## Instalação
 
@@ -17,15 +23,16 @@ npx loop-development init
 
 Instala em `~/.config/opencode/`:
 
-- `agents/` — os 21 agentes (orquestrador + 20 subagents);
+- `agents/` — os 21 agentes (orquestrador + 20 subagents), com as permissões internas no **frontmatter** de cada `.md`;
 - `commands/` — os comandos `/loop-development`, `/loop-development-continue` e `/loop-development-status`;
 - `scripts/` — o `set-model.sh` (alternativa em bash ao subcomando `set-model`);
 - `templates/` — o esqueleto de estado persistente para novos projetos;
-- mescla no `opencode.json` (ou `opencode.jsonc`) existente as permissões do agente `loop-development` (`task` + `read`/`edit`/`glob` em `allow` para `.loop-development/**`, também nos subagentes internos) — com backup em `opencode.json.bak-loop-development`. Os valores geridos são **sobrepostos** se já existirem, preservando as restantes customizações; nada que o Loop Development não gere é tocado. A exceção é o mapa `permission.bash`, gerido de forma **aditiva**: o installer só **acrescenta** padrões em falta, nunca sobrepõe regras que já tenhas definido.
-- define o **default de shell** no `opencode.json`: `permission.bash` com `"*": "allow"` (todos os agentes correm comandos sem pedir permissão) e uma lista de comandos **destrutivos** em `"ask"` — esses pedem aprovação (ver lista na secção *Autonomia e permissões*);
-- **remove entradas stale** de agentes que o Loop Development já não instala como ficheiros (`implementer`, `verifier`, `loop-triage` em versões antigas), chaves bash per-agent que versões antigas adicionavam, e o artefacto inválido `agent.permission` — após backup, para não reativarem permissões antigas.
+- `plugins/` — os dois plugins (`session-title` e `telegram`), em formato V2 (default export);
+- mescla no `opencode.json` (ou `opencode.jsonc`) existente **apenas as guardas de shell**: o array `permissions` de topo com `action: "shell"` — `"*": "allow"` mais os padrões destrutivos em `"ask"` (ver *Autonomia e permissões*), com backup em `opencode.json.bak-loop-development`. É o **único** bloco que o pacote escreve no teu config global, porque **as permissões internas dos nossos agentes vivem só no frontmatter dos `.md`** (ver *Autonomia e permissões*);
+- o merge é **aditivo por identidade de regra** (`action` + `resource`). Numa regra tua com o mesmo par mas `effect` diferente, o Loop Development **não toca** — reporta um **conflito** e mantém a tua. Nunca remove nem reordena regras tuas;
+- **remove entradas stale** de agentes que o Loop Development já não instala como ficheiros (`implementer`, `verifier`, `loop-triage` em versões antigas), regras `shell` por-agente que versões antigas adicionavam, e o artefacto inválido `agents.permission` — após backup, para não reativarem permissões antigas.
 
-Repetir o comando é seguro (idempotente). Reinicia o OpenCode depois de instalar.
+Repetir o comando é seguro (idempotente). **Ficheiros que tenhas editado à mão não são sobrescritos** — o installer só refresca o que consegue provar que é uma versão nossa mais antiga; para substituir mesmo o teu, usa `--force` (faz backup do que troca). O `update` é o comando que sincroniza o resto. Reinicia o OpenCode depois de instalar.
 
 Diretórios de config suportados, por ordem de prioridade:
 
@@ -46,8 +53,9 @@ Cria no diretório atual (ou no caminho indicado: `init --project <dir>`):
 
 - `.loop-development/` — esqueleto do estado persistente;
 - `AGENTS.md` — gerado a partir dos presets de stack que escolheres (ou do template, se escolheres "manual");
-- **grants de acesso ao projeto** — o `installProject` também grava, de forma **aditiva**, permissões por agente no `opencode.json` da raiz do projeto (criando-o se não existir, com backup `opencode.json.bak-loop-development` se existir). Todos os agentes do pacote recebem `read`/`glob` em `"*": "allow"` e os agentes que escrevem código/testes/docs (implementer, test-writer, refactorer, documentation-writer) recebem `edit` em `allow`. Isto evita o loop parar a pedir permissão em cada leitura/escrita dentro do projeto. O merge é **puramente aditivo**: só preenche as chaves que ainda não existirem — qualquer `permission.read`/`edit` que já tenhas definido no projeto **vence sempre** e nunca é sobreposta.
-- **exceção `.env`:** depois do `"*": "allow"`, cada mapa repete as regras `.env` dos defaults do opencode — `"*.env": "ask"` e `"*.env.*": "ask"` (ficheiros de segredos pedem aprovação, mesmo com o broad allow), e `"*.env.example": "allow"` (templates continuam legíveis/editáveis). Isto é necessário porque as regras do agente são anexadas após os defaults do opencode: sem estas exceções explícitas, o broad `"*": "allow"` desligaria a proteção nativa de `.env`. (Limitção conhecida do opencode: a permissão `glob` casa sobre o *padrão* pedido, não sobre os ficheiros que o padrão devolve — para proteger conteúdo de `.env` contra grep/glob, o guarda é o `read`.)
+- **grants de acesso ao projeto** — o `installProject` também grava, de forma **aditiva**, regras por agente em `agents.<id>.permissions` no `opencode.json` da raiz do projeto (criando-o se não existir, com backup `opencode.json.bak-loop-development` se existir). Todos os agentes do pacote recebem `read`/`glob` em `"*": "allow"` e os agentes que escrevem código/testes/docs (implementer, test-writer, refactorer, documentation-writer) recebem `edit` em `allow`. Isto evita o loop parar a pedir permissão em cada leitura/escrita dentro do projeto. O merge é **puramente aditivo**: só acrescenta regras que ainda não existam e, se uma regra tua casar com o mesmo `action`+`resource` mas outro `effect`, é reportada como **conflito** e fica intacta.
+- **exceção `.env`:** depois do `"*": "allow"`, cada acção repete as regras `.env` dos defaults do opencode — `"*.env": "ask"` e `"*.env.*": "ask"` (ficheiros de segredos pedem aprovação, mesmo com o broad allow), e `"*.env.example": "allow"` (templates continuam legíveis/editáveis). Isto é necessário porque **as regras anexam e a última que casa ganha**: o grant broad `"*": "allow"` tem de preceder estas exceções, senão desligaria a proteção nativa de `.env`. Por isso a inserção de uma regra broad é sensível à ordem (entra depois da última broad da mesma acção e antes de qualquer específica). (Limitação conhecida do opencode: a permissão `glob` casa sobre o *padrão* pedido, não sobre os ficheiros que o padrão devolve — para proteger conteúdo de `.env` contra grep/glob, o guarda é o `read`.)
+- **`.gitignore`:** garante `.env`, `.env.*` e `!*.env.example`. Já **não** escreve `.loop-development/session-titles.json` — em V2 o estado dos títulos de sessão vive em `ctx.storage` (ver *Títulos de sessão*).
 
 O comando abre um **wizard interativo** (escolhe backend → frontend → gestor de pacotes). Para não-interativo (CI/scripts):
 
@@ -84,6 +92,7 @@ Depois **revisa o `AGENTS.md`** — é isto que dá ao Verifier e ao Test Writer
 | `loop-development update` | Re-sincroniza a partir do pacote. |
 | `loop-development uninstall` | Remove apenas o que foi instalado pelo Loop Development (usa o manifesto). |
 | `loop-development status` | Mostra o estado da instalação e do projeto atual. |
+| `loop-development doctor [--fix] [--dir <dir>]` | Diagnostica a instalação contra o OpenCode V2 (6 verificações; sai com código != 0 se algo estiver errado). |
 | `loop-development set-model <tier> <modelo>` | Troca o modelo de todos os agentes de uma camada (sintaxe compatível). |
 | `loop-development set-model --<tier> <modelo> ...` | Troca os modelos dos tiers indicados. |
 | `loop-development set-model --all <modelo>` | Troca o modelo de todos os agentes de todos os tiers. |
@@ -94,19 +103,19 @@ Depois **revisa o `AGENTS.md`** — é isto que dá ao Verifier e ao Test Writer
 | `loop-development architecture check [<dir>]` | Audita `.loop-development/architecture.md` contra o contrato de conteúdo (read-only; exit 0 limpo, 1 com violações). |
 | `loop-development secrets check [<dir>] [--history]` | Audita valores sensíveis de variáveis de ambiente em ficheiros versionados e, com `--history`, no histórico git (read-only; exit 0 limpo, 1 com achados de alta confiança). |
 | `loop-development secrets purge [<dir>] [--tool filter-repo\|filter-branch]` | Reescreve o histórico git para remover ficheiros com segredos (requer confirmação; `--dry-run` lista sem alterar). |
-| `loop-development allow add <caminho>` | Autoriza uma pasta fora do projeto (grava no `opencode.json` via `external_directory`). |
+| `loop-development allow add <caminho>` | Autoriza uma pasta fora do projeto (grava regras `external_directory` no `opencode.json`). |
 | `loop-development allow remove <caminho>` | Retira a autorização de uma pasta externa. |
 | `loop-development allow list` | Lista as pastas externas autorizadas. |
 | `loop-development allow clear` | Remove todas as autorizações externas. |
 | `loop-development link [<dir>]` | Liga o projeto ao main (ancestral com `.loop-development/`), regista children e reconcilia ligações stale. |
 | `loop-development unlink <caminho>` | Remove a ligação main/child (estado + grants de acesso). |
-| `loop-development telegram setup` | Configura o bot do Telegram para aprovações remotas de permissões e respostas a perguntas. |
+| `loop-development telegram setup` | Configura o bot do Telegram para aprovações remotas de permissões (as perguntas são só notificação). |
 | `loop-development telegram status` | Mostra o estado da configuração do Telegram (token, chave de emparelhamento, chats autorizados). |
 | `loop-development telegram reset` | Remove a configuração do Telegram. |
 | `loop-development --list-presets` | Lista os presets de stack disponíveis. |
 | `loop-development --version` / `--help` | Versão / ajuda. |
 
-Opções comuns: `--yes` (não confirmar), `--force` (sobrescrever existentes), `--dry-run` (mostrar sem alterar), `--config-dir <dir>`. No `init --project`: `--backend <id>`, `--frontend <id>`, `--pm <npm|pnpm|yarn|bun>` (tornam o fluxo não-interativo) e `--no-link` (não correr a ligação automática main/child).
+Opções comuns: `--yes` (não confirmar), `--force` (sobrescrever existentes), `--dry-run` (mostrar sem alterar), `--config-dir <dir>`. No `init --project`: `--backend <id>`, `--frontend <id>`, `--pm <npm|pnpm|yarn|bun>` (tornam o fluxo não-interativo) e `--no-link` (não correr a ligação automática main/child). No `doctor`: `--fix` (repara o que for automático) e `--dir <dir>` (diretório a usar como raiz).
 
 ## Como usar
 
@@ -153,7 +162,7 @@ Lê `.loop-development/state.json`, retoma o plano ativo (ou o plano indicado co
 7. A partir daqui, o loop corre **sozinho**, tarefa a tarefa: implementa, refatora, escreve testes, corre verificações (testes/typecheck/lint/prettier/segurança/performance), corrige até tudo passar, documenta, faz commit, persiste estado, sem te voltar a interromper entre tarefas, a não ser que surja uma ambiguidade genuína fora do que foi aprovado.
 8. No fim, Final Reviewer faz uma revisão global e o Loop Development reporta um resumo final. (No modo `simple` não há Final Reviewer nem passos por tarefa além de implementar e persistir estado — toda a verificação acontece no fim do plano; ver *Modos de execução*.)
 
-> **Sobre o Grill-Me:** no fluxo, o `grill-me` executado é o **agente do pacote**, invocado pelo orquestrador via Task (e também acessível com `@grill-me`). É independente de qualquer skill do utilizador com o mesmo nome — o agente tem acesso à tool `skill` negado, pelo que as instruções dele vêm sempre do pacote, não de skills instaladas (ex: `~/.agents/skills/grill-me/`).
+> **Sobre o Grill-Me:** no fluxo, o `grill-me` executado é o **agente do pacote**, invocado pelo orquestrador via a acção `subagent` (e também acessível com `@grill-me`). É independente de qualquer skill do utilizador com o mesmo nome — o agente tem acesso à tool `skill` negado, pelo que as instruções dele vêm sempre do pacote, não de skills instaladas (ex: `~/.agents/skills/grill-me/`).
 
 ## Modos de execução
 
@@ -254,9 +263,19 @@ Os tiers omitidos numa operação com flags permanecem inalterados. `--dry-run` 
 
 Dentro do ciclo de uma tarefa (implementação, testes, lint, prettier), o **shell está em `allow` por defeito em todos os agentes**: o loop não para para pedir permissão em cada comando (npm, pnpm, node, git add/commit/log, etc.). As únicas paragens manuais garantidas são a aprovação do **plano** e da **lista de tarefas**, mais os **comandos destrutivos** (lista em baixo) que pedem aprovação mesmo dentro do ciclo.
 
-**Pasta `.loop-development/` pré-autorizada:** a instalação adiciona `read`/`edit`/`glob` em `allow` para o padrão `.loop-development/**` no agente `loop-development` e nos subagentes internos (context-loader, state-manager, planner-writer, task-generator, compacter, refactorer, documentation-writer, final-reviewer), e `read`/`glob` em `allow` para os agentes que apenas lêem o estado dos planos (implementer, test-writer, git-manager). Assim, o fluxo lê e atualiza o estado sem pedir permissão na primeira execução. Se já tiveres `read`/`edit` com `"ask"` nesses agentes, a regra é mesclada (`{ "*": "ask", ".loop-development/**": "allow" }`) — a tua configuração não é sobrescrita. Tudo o resto do projeto segue a tua configuração.
+### Como o OpenCode V2 lê as permissões
 
-**Default de shell com comandos destrutivos a pedir aprovação:** a instalação escreve no `opencode.json` o mapa `permission.bash` com `"*": "allow"` (default) e a lista de padrões destrutivos em `"ask"`. Como no opencode as regras do agente prevalecem sobre o global, o installer **deixou de tocar no `bash` per-agent** — por isso o default aplica-se a todos os agentes (orquestrador, executores, planeamento e leitura), exceto aos teus agentes com regra própria (`build`, `plan`, etc.), que mantêm o comportamento que definiste. O mapa é **aditivo**: o installer só acrescenta padrões em falta e nunca sobrepõe valores que já tenhas editado. Para restringir um agente específico, define `permission.bash` nesse agente no `opencode.json`; para desligar um padrão global, apaga-o do mapa ou muda-o para `allow`.
+Em V1 as permissões eram mapas `agent.<id>.permission.<acção>` com pares padrão→efeito. Em V2 são **listas ordenadas de regras** `{ action, resource, effect }` num array `permissions` — de topo no config global e por agente em `agents.<id>.permissions`. Três consequências que mudam o que se pode escrever no teu config:
+
+- **As acções foram renomeadas:** `bash`→`shell`, `task`→`subagent`, `write`/`patch`→`edit`.
+- **As regras anexam e a última que casa ganha.** Não existe "as regras do agente prevalecem sobre o global": as listas de todos os âmbitos aplicam-se em conjunto e o vencedor depende da ordem. É por isso que o grant broad `"*": "allow"` tem de ser inserido *antes* das exceções específicas — o installer faz essa inserção sensível à ordem, não um append cego.
+- **O `.md` é a única fonte das permissões internas dos nossos agentes.** Cada agente declara o seu `permissions:` no frontmatter (`subagent` com `deny` em `"*"` e `allow` por subagente conhecido, `read`/`glob`/`edit` sobre `.loop-development/**`, `edit`/`webfetch`/`skill`/`question` consoante o papel). O config global **não** volta a duplicar isto: em V1 a duplicação era inofensiva (dois mapas mesclavam por chave), mas em V2 as duas listas aplicam-se em conjunto e, se divergissem, o vencedor dependia da ordem de carga. No `opencode.json` global ficam só as guardas de shell de topo; as regras por-agente só entram no `opencode.json` do **projeto** (grants de projeto), que são legitimamente config-level.
+
+**Pasta `.loop-development/` pré-autorizada:** cada agente declara no seu frontmatter `read`/`glob` em `allow` para `.loop-development/**`, e `edit` em `allow` nos que também escrevem estado (loop-development, context-loader, state-manager, planner-writer, task-generator, compacter, refactorer, documentation-writer, final-reviewer). Assim, o fluxo lê e atualiza o estado sem pedir permissão na primeira execução. Uma regra tua mais específica continua a ganhar se vier **depois** (ordem conta) — o installer não toca em regras tuas, em nenhum sentido.
+
+**Default de shell com comandos destrutivos a pedir aprovação:** a instalação escreve no `opencode.json` o array `permissions` de topo com `{ "action": "shell", "resource": "*", "effect": "allow" }` e a lista de padrões destrutivos em `ask`. Como as permissões internas vivem no `.md`, nenhum dos nossos agentes declara `shell` — por isso o default aplica-se a todos eles. Para restringir um agente específico, acrescenta uma regra `shell` em `agents.<id>.permissions` no `opencode.json` (ou no `permissions:` do `.md`); para desligar um padrão global, apaga-o do array ou muda o `effect` para `allow`.
+
+**Merge sempre aditivo:** o installer identifica uma regra por `action`+`resource`. Se essa regra já existir, não é sobrescrita: se o `effect` for igual, nada muda; se for diferente, é um **conflito** — o teu valor fica e o install imprime o conflito. Nunca removemos nem reordenamos regras tuas. (Overwrite exigiria remover a tua e reinseri-la, o que mudaria a ordem relativa face ao resto das regras.)
 
 **Comandos destrutivos (pedem aprovação):**
 
@@ -267,15 +286,17 @@ Dentro do ciclo de uma tarefa (implementação, testes, lint, prettier), o **she
 - docker: `rm`, `rmi`, `system prune`, `volume rm`, `compose down`;
 - infra: `terraform destroy`, `tofu destroy`.
 
-O `git-manager` herda este default: comandos de leitura/`add`/`commit` correm sem pedir; `push`, `checkout`, `branch`, `merge`, `rebase` e `reset` pedem aprovação — o que materializa a regra dele de "nunca faz push nem muda de branch sem instrução explícita".
+O `git-manager` herda este default: comandos de leitura/`add`/`commit` correm sem pedir; `push`, `checkout`, `switch`, `merge`, `rebase`, `branch -D` e `reset --hard` pedem aprovação — o que materializa a regra dele de "nunca faz push nem muda de branch sem instrução explícita".
 
-Na atualização, o installer **migra** instalações antigas: remove as chaves `bash` per-agent que ele próprio tinha adicionado (tracked no manifest) e o artefacto inválido `agent.permission`, para o default global passar a valer.
+Na atualização, o installer **limpa** o que versões antigas do pacote tinham gerado: as regras `shell` por-agente registadas no manifesto e o artefacto inválido `agents.permission`. E, se o teu config ainda estiver em forma V1 (`agent`, mapas `permission`), converte-o — ver *Migrar de V1 para V2*.
 
-Se em algum projeto quiseres mais controlo (ex: `edit: ask` também dentro do ciclo), ajusta a `permission` no ficheiro do agente relevante em `~/.config/opencode/agents/`.
+Se em algum projeto quiseres mais controlo (ex: `edit` em `ask` também dentro do ciclo), ajusta o bloco `permissions:` no frontmatter do ficheiro do agente relevante em `~/.config/opencode/agents/` (ou as regras em `agents.<id>.permissions` no `opencode.json` do projeto).
 
 ## Aprovações remotas via Telegram
 
-O Loop Development inclui um plugin opcional que envia os pedidos de permissão e as perguntas (tool `question`) para um bot do Telegram, para poderes aprovar ou responder a partir do telemóvel.
+O Loop Development inclui um plugin opcional que envia os **pedidos de permissão** para um bot do Telegram, para poderes aprovar a partir do telemóvel.
+
+As **perguntas** (tool `question`) são outro caso: em V2 são forms e o V2 não expõe um domínio `question`/`form` a plugins de servidor (só a API de CLI/TUI tem `session.form.reply`). Como o Telegram tem de funcionar 24/7, independente de o TUI estar aberto, o plugin continua a ser server plugin e as perguntas chegam apenas como **notificação sem botões**, com instrução de abrir o TUI para responder.
 
 **1. Cria o bot** no [@BotFather](https://t.me/BotFather) e guarda o token.
 
@@ -289,9 +310,9 @@ O setup verifica o token, guarda a chave de emparelhamento e mostra as instruç�
 
 **3. Emparelha o chat:** abre o bot no Telegram e envia `/start <chave>` (vista em `loop-development telegram status`). Só chats autorizados recebem notificações ou podem responder.
 
-A partir daí, cada `permission.asked` e `question.asked` chega ao Telegram:
-- permissões: botões **Aprovar / Sempre / Rejeitar** (o "Sempre" pede confirmação dos padrões);
-- perguntas: botões por opção (multi-escolha usa "Concluir"), ou responde à mensagem com texto livre se a pergunta aceitar `custom`.
+A partir daí, cada pedido de permissão chega ao Telegram:
+- permissões: botões **Aprovar / Sempre / Rejeitar** (o "Sempre" pede confirmação dos padrões). A resposta usa `ctx.permission.reply({ sessionID, requestID, decision })` — o campo é `decision`, não `reply`;
+- perguntas: **só notificação**, sem botões e sem resposta remota — responde no TUI.
 
 Estado atual: `loop-development telegram status` · Remover: `loop-development telegram reset`.
 
@@ -310,16 +331,16 @@ npx loop-development allow remove C:/Users/teu-user/recursos
 npx loop-development allow clear
 ```
 
-O `allow add` valida que a pasta existe, grava a referência em `.loop-development/allowed-folders.json` e escreve de forma **aditiva** o mapa `permission.external_directory` no `opencode.json` do projeto (padrões `<caminho>` e `<caminho>/**` em `allow`, com backup `opencode.json.bak-loop-development`). Regras manuais que já tenhas no `external_directory` nunca são sobrepostas; `remove`/`clear` só apagam padrões que o Loop Development gerou. Caminhos são normalizados (absolutos, forward slashes, `~` expandido). `--dry-run` mostra as alterações sem escrever.
+O `allow add` valida que a pasta existe, grava a referência em `.loop-development/allowed-folders.json` e escreve de forma **aditiva** regras `{ "action": "external_directory", "resource": "<caminho>", "effect": "allow" }` no array `permissions` de topo do `opencode.json` do projeto (padrões `<caminho>` e `<caminho>/**`, com backup `opencode.json.bak-loop-development`). Regras manuais que já tenhas em `external_directory` nunca são sobrepostas; `remove`/`clear` só apagam padrões que o Loop Development gerou. Caminhos são normalizados (absolutos, forward slashes, `~` expandido). `--dry-run` mostra as alterações sem escrever.
 
-> O mecanismo usa a permissão nativa `permission.external_directory` do opencode: dentro do projeto os defaults do workspace continuam a valer e ficheiros `.env` continuam a pedir aprovação.
+> O mecanismo usa a acção nativa `external_directory` do opencode (no V2 deixou de ser o mapa `permission.external_directory` e passou a ser uma regra `action: "external_directory"` no array `permissions`): dentro do projeto os defaults do workspace continuam a valer e ficheiros `.env` continuam a pedir aprovação.
 
 ### Ligação automática main/child
 
 Quando um projeto vive dentro de outro (monorepos, sub-projetos), o Loop Development liga-os automaticamente para o child poder ler o contexto mínimo do main:
 
 - **Parent/children** ficam em `.loop-development/state.json` (`parent` no child, `children[]` no main) — o `link` deteta o ancestral mais próximo com `.loop-development/` (sobe até 5 níveis) e os children diretos (profundidade 1, ignorando `node_modules`, `.git` e pastas ocultas).
-- O child recebe **acesso de leitura à raiz do main** via `permission.external_directory` e o Context Loader passa a ler `architecture.md`, `state.json` e `project-summary.md` do main (só leitura) ao carregar contexto.
+- O child recebe **acesso de leitura à raiz do main** via regras `external_directory` no `opencode.json` do child e o Context Loader passa a ler `architecture.md`, `state.json` e `project-summary.md` do main (só leitura) ao carregar contexto.
 - Cadeias são suportadas: um child pode ser main de outro child.
 - Automático: o `init --project` corre o `link` no final e o Intake corre `npx loop-development link` em cada novo plano (idempotente). Para desativar no init: `--no-link`.
 
@@ -351,16 +372,82 @@ Modos de `mode`:
 - `always`: sobrepõe sempre que o plano ativo mudar.
 - `never`: só define o título quando a sessão ainda tem o default.
 
-O estado (último título definido por sessão) fica em `.loop-development/session-titles.json` do projeto, por isso renomes manuais continuam respeitados entre reinícios. O ficheiro é por-máquina e o `loop-development init` adiciona-o ao `.gitignore` do projeto.
+O estado (último título definido por sessão) vive no **`ctx.storage` do próprio plugin**, sob a chave `titles` — é durável e fica scoped pelo id do plugin, por isso renomes manuais continuam respeitados entre reinícios. Já **não** existe `.loop-development/session-titles.json` no projeto, e o `init --project` **não** escreve essa entrada no `.gitignore` (só `.env`, `.env.*` e `!*.env.example`).
 
 > **A atualizar de versões antigas**: os plugins anteriores de rename de sessão estão quebrados e devem ser removidos à mão — apaga `~/.config/opencode/plugins/session-auto-rename.ts` e retira `"opencode-session-auto-rename"` do array `plugin` do teu `opencode.json`, depois corre `npx loop-development update` e reinicia o opencode.
+
+## Plugins (formato OpenCode V2)
+
+Os dois plugins (`session-title`, `telegram`) são ficheiros `.ts` locais em `~/.config/opencode/plugins/`, autoconsiderados pelo OpenCode, e ambos seguem o formato V2:
+
+- **default export** com `{ id, setup }` — `export default plugin`. O V1 usava *named* exports, e o loader V2 simplesmente **não carregava** o ficheiro (o sintoma aparecia no log como `failed to load plugin` … `Missing key at ["default"]`). É esta a razão do requisito de V2;
+- `setup(ctx)` devolve a função de cleanup (o plugin aborta o `AbortController` do `ctx.event.subscribe({ signal })` ao sair);
+- todo o estado é **closure do `setup`** — no V2 os plugins são instanciados por localização, portanto estado a nível de módulo seria partilhado entre instâncias;
+- eventos são filtrados por `ctx.location.directory` (o stream é global);
+- **sem dependências de runtime**: o único import de `@opencode/plugin` é `import type`, apagado em runtime. A pasta de config do OpenCode nunca precisa de `node_modules`.
+
+Hooks usados: `ctx.session.hook("context", …)` no session-title (o `chat.message` do V1 **não existe** em V2; o hook de contexto expõe o agente activo da sessão), `ctx.session.get`/`ctx.session.update` para o título, `ctx.permission.reply` no telegram.
+
+## Migrar de V1 para V2
+
+Se vinhas do Loop Development anterior (`0.x`) ou tens config/agentes em forma V1, o upgrade é:
+
+```bash
+npx loop-development doctor        # 1. Diagnostica (não altera nada)
+npx loop-development update        # 2. Migra config V1→V2 e re-sincroniza os agentes
+npx loop-development doctor --fix  # 3. Repara o que for automático
+# reinicia o OpenCode
+```
+
+O `update` faz a migração sozinho, em ambos os sentidos (config global e config de projeto), sempre com backup (`*.bak-loop-development`) e relatório do que converteu:
+
+| V1 | V2 |
+|---|---|
+| `agent.<id>` | `agents.<id>` |
+| `agent.<id>.permission.<acção>` (mapa padrão→efeito) | `agents.<id>.permissions` (array de `{ action, resource, effect }`) |
+| `permission` (mapa, no topo) | `permissions` (array ordenado, no topo) |
+| `permission.bash` (mapa) | regras `action: "shell"` no array `permissions` |
+| `permission.external_directory` (mapa) | regras `action: "external_directory"` no array `permissions` |
+| acção `bash` | `shell` |
+| acção `task` | `subagent` |
+| acções `write` / `patch` | `edit` |
+| frontmatter `permission:` nos `.md` | frontmatter `permissions:` (array) |
+| frontmatter `tools:` | removido (obsoleto) |
+| frontmatter `temperature:` | `request.body.temperature` — **ver ressalva abaixo** |
+| plugin com *named* export | plugin com `export default { id, setup }` |
+| manifesto com chaves e `files: string[]` | manifesto v2: regras com identidade `action`+`resource` e `files: [{ path, sha256, shippedIn }]` |
+
+O que o `update` **não** faz: não sobrescreve um ficheiro que tenhas editado à mão (só com `--force`), não remove regras tuas e não reordena nada. Se uma regra tua colidir com uma gerida (mesmo `action`+`resource`, `effect` diferente), reporta o conflito e mantém a tua.
+
+## Diagnóstico: `loop-development doctor`
+
+```bash
+npx loop-development doctor [--fix] [--dir <dir>] [--config-dir <dir>]
+```
+
+Seis verificações, em sequência, com `--dry-run` a não alterar nada:
+
+1. **Versão do OpenCode** — corre `opencode --version` e falha se ainda for V1;
+2. **Manifesto** — versão instalada vs. versão do pacote, versão do formato do manifesto, ficheiros embarcados em falta e hashes stale;
+3. **Forma do config** — detecta chaves V1 (`agent`, `permission` como objeto) que o V2 ignora silenciosamente;
+4. **Frontmatter dos agentes** — detecta `permission:`, `temperature:` e `tools:` (chaves V1) nos `.md` instalados;
+5. **Plugins** — verificação estática de que existe `export default`, **e** leitura de `~/.local/share/opencode/log/opencode.log` à procura de `failed to load plugin` recente que mencione os nossos caminhos. O log é a fonte de verdade: um `-` na coluna VERSION do `plugin list` não é sinal de falha;
+6. **Dependências** — confirma `@opencode/plugin`, `typescript` e `@types/node` (as `VERIFY_DEPS`). Fora de um checkout de desenvolvimento reporta que não há nada a verificar, em vez de um falso "tudo OK".
+
+**Exit code:** 0 se tudo estiver em ordem, **!= 0** se alguma verificação falhar (pronto para CI). `--fix` repara o que for automático — dependências em falta (com o package manager detetado) e a migração do config. Quando algo não é reparável, o comando diz como resolver (por exemplo `corre 'loop-development update'`).
+
+> **Ressalva sobre a temperatura.** Os 21 agentes trazem `temperature` no frontmatter sob `request.body.temperature` — a forma correta para o futuro. Só que o runner de sessões do V2 **preserva estes valores mas ainda não os envia** nos pedidos ao modelo (*"The V2 session runner preserves these values but does not yet send them with model requests"*, OpenCode v2.0.11). Ou seja: **as temperaturas por agente não são aplicadas hoje.** A migração não perdeu nada (já não eram aplicadas no V1 também), mas se dependias de temperaturas diferenciadas por tier, não esperes esse efeito até o OpenCode os enviar.
 
 ## Desenvolvimento
 
 ```bash
-npm test            # corre a suíte (node --test)
-npm pack --dry-run  # mostra o conteúdo que seria publicado
+npm test              # corre a suíte (node --test)
+npm run typecheck     # tsc -p tsconfig.json — typecheck dos .ts dos plugins
+npm run doctor        # o mesmo diagnóstico do CLI, a partir deste checkout
+npm pack --dry-run    # mostra o conteúdo que seria publicado
 ```
+
+As dependências de verificação (`@opencode/plugin`, `typescript`, `@types/node`) estão em `devDependencies` e o script `prepare` (`bin/ensure-deps.js`) instala-as em falta sem nunca falhar a instalação do pacote. Os plugins em si **não têm dependências de runtime**.
 
 ### Publicação
 

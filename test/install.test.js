@@ -7,10 +7,24 @@ import { installGlobal, installProject } from "../src/install.js";
 import { uninstall } from "../src/uninstall.js";
 import { setModel } from "../src/set-model.js";
 import { loadManifest, MANIFEST_FILE } from "../src/manifest.js";
-import { findConfigFile, parseConfig, getPath } from "../src/merge-config.js";
+import { findConfigFile, parseConfig, readRules } from "../src/merge-config.js";
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), "ld-install-"));
+}
+
+// No V2 as permissões são arrays ordenados de { action, resource, effect }, e
+// vale a última regra que casa. Estes atalhos mantêm as asserções legíveis.
+function rulesOf(config, agent = null) {
+  return readRules(config, { agent });
+}
+
+function effectOf(config, action, resource, agent = null) {
+  return rulesOf(config, agent).find((r) => r.action === action && r.resource === resource)?.effect;
+}
+
+function hasRule(config, action, resource, agent = null) {
+  return rulesOf(config, agent).some((r) => r.action === action && r.resource === resource);
 }
 
 test("installGlobal copia assets, mescla config e grava manifesto", async () => {
@@ -33,38 +47,34 @@ test("installGlobal copia assets, mescla config e grava manifesto", async () => 
   const configFile = findConfigFile(dir);
   assert.ok(existsSync(configFile));
   const config = parseConfig(readFileSync(configFile, "utf8"));
-  assert.equal(getPath(config, "agent.loop-development.permission.task.intake"), "allow");
-  assert.equal(getPath(config, "agent.loop-development.permission.task.grill-me"), "allow");
-  assert.equal(getPath(config, "agent.loop-development.permission.task.*"), "deny");
 
-  const mainRead = getPath(config, "agent.loop-development.permission.read");
-  assert.equal(mainRead[".loop-development/**"], "allow");
-  assert.equal(getPath(config, "agent.loop-development.permission.edit")[".loop-development/**"], "allow");
-  assert.equal(getPath(config, "agent.loop-development.permission.glob")[".loop-development/**"], "allow");
-  assert.equal(getPath(config, "agent.loop-development.permission.question"), "allow");
-  assert.equal(getPath(config, "agent.state-manager.permission.read")[".loop-development/**"], "allow");
-  assert.equal(getPath(config, "agent.context-loader.permission.edit")[".loop-development/**"], "allow");
+  // §3.6: o config global só leva o bloco `permissions` de topo (guardas de
+  // shell). As permissões internas dos nossos agentes vivem no frontmatter dos
+  // .md — duplicá-las aqui fazia as duas listas aplicarem-se em conjunto.
+  assert.equal(config.agent, undefined, 'nada de "agent" (forma V1) no config global');
+  assert.equal(config.permission, undefined, 'nada de "permission" (forma V1) no config global');
+  assert.equal(config.agents, undefined, "nenhum bloco agents no config global");
 
-  for (const name of ["implementer", "test-writer", "git-manager"]) {
-    assert.equal(getPath(config, `agent.${name}.permission.read`)[".loop-development/**"], "allow", `${name} deve ler .loop-development/**`);
-    assert.equal(getPath(config, `agent.${name}.permission.glob`)[".loop-development/**"], "allow", `${name} deve fazer glob de .loop-development/**`);
-    assert.equal(getPath(config, `agent.${name}.permission.edit`), undefined, `${name} não deve ter edit allow em .loop-development/**`);
-  }
-
-  const bash = getPath(config, "permission.bash");
-  assert.equal(bash["*"], "allow");
+  const shell = rulesOf(config).filter((r) => r.action === "shell");
+  assert.ok(shell.length >= 30, `esperado o catch-all mais a lista destrutiva, há ${shell.length}`);
+  assert.deepEqual(shell[0], { action: "shell", resource: "*", effect: "allow" });
   for (const pattern of ["git push*", "git reset --hard*", "rm *", "sudo *", "npm uninstall*", "docker system prune*", "terraform destroy*"]) {
-    assert.equal(bash[pattern], "ask", `${pattern} deve pedir aprovação`);
-  }
-
-  for (const name of ["implementer", "refactorer", "test-writer", "verifier", "dependency-auditor", "security-auditor", "performance-auditor"]) {
-    assert.equal(getPath(config, `agent.${name}.permission.bash`), undefined, `${name} não deve ter bash per-agent`);
+    assert.equal(effectOf(config, "shell", pattern), "ask", `${pattern} deve pedir aprovação`);
   }
 
   const manifest = await loadManifest(dir);
   assert.ok(manifest.files.length > 0);
   assert.ok(manifest.configAdded.length > 0);
   assert.ok(manifest.version);
+  // Manifest v2: as entradas de config são identificadas por regra, não por
+  // caminho de chave.
+  assert.deepEqual(manifest.configAdded[0], {
+    legacy: false,
+    agent: null,
+    action: "shell",
+    resource: "*",
+    effect: "allow"
+  });
 });
 
 test("installGlobal é idempotente", async () => {
@@ -90,7 +100,7 @@ test("installGlobal preserva arquivos e config pré-existentes do usuário", asy
   assert.equal(readFileSync(join(dir, "agents", "meu-agente.md"), "utf8").includes("meu"), true);
   const config = parseConfig(readFileSync(join(dir, "opencode.json"), "utf8"));
   assert.equal(config.provider.chave, "valor");
-  assert.equal(getPath(config, "agent.loop-development.permission.task.intake"), "allow");
+  assert.equal(effectOf(config, "shell", "*"), "allow", "os nossos grants de shell foram acrescentados");
 });
 
 test("installGlobal --force sobrescreve arquivos existentes", async () => {
@@ -110,23 +120,34 @@ test("installGlobal --dry-run não escreve nada", async () => {
   assert.ok(!existsSync(join(dir, "opencode.json")));
 });
 
-test("installGlobal remove entries stale do config e registra configRemoved", async () => {
+test("installGlobal remove entradas stale de agentes e registra configRemoved", async () => {
   const dir = tempDir();
+  // Config V1 com um agente completo: o instalador embute agora os agentes em
+  // .md, por isso uma entrada com chaves de assinatura é obsoleta.
   writeFileSync(
     join(dir, "opencode.json"),
-    JSON.stringify({ agent: { implementer: { name: "implementer", description: "L2", mode: "subagent", prompt: "x", permission: { bash: "ask" } } } }),
+    JSON.stringify({
+      agent: {
+        implementer: {
+          name: "implementer",
+          description: "L2",
+          mode: "subagent",
+          prompt: "x",
+          permission: { read: { ".loop-development/**": "allow" } },
+        },
+      },
+    }),
     "utf8"
   );
 
   const result = await installGlobal({ configDir: dir });
 
-  assert.ok(result.configRemoved.includes("agent.implementer"));
+  assert.ok(result.configRemoved.includes("agents.implementer"), "a entrada stale é removida sob o nome V2");
   const config = parseConfig(readFileSync(join(dir, "opencode.json"), "utf8"));
-  assert.equal(getPath(config, "agent.implementer.name"), undefined);
-  assert.equal(getPath(config, "agent.implementer.permission.bash"), undefined);
-  assert.equal(getPath(config, "agent.implementer.permission.read")[".loop-development/**"], "allow");
+  assert.equal(config.agents?.implementer?.name, undefined);
+  assert.ok(config.agent === undefined, "`agent` foi migrado para `agents`");
   const manifest = await loadManifest(dir);
-  assert.ok(manifest.configRemoved.includes("agent.implementer"));
+  assert.ok(manifest.configRemoved.includes("agents.implementer"));
   assert.ok(existsSync(join(dir, "opencode.json.bak-loop-development")));
 });
 
@@ -143,16 +164,19 @@ test("installGlobal com entry stale é idempotente", async () => {
   assert.equal(result.configRemoved.length, 0);
 });
 
-test("installGlobal migra config antigo: remove bash per-agent e artefacto agent.permission", async () => {
+test("installGlobal migra config antigo: remove shell per-agent e o artefacto agents.permission", async () => {
   const dir = tempDir();
+  // Manifest v2: entradas com identidade de regra. Entradas no formato v1
+  // ({ path, key }) são marcadas legacy e não casam com a limpeza — perda única e
+  // inofensiva, aceite pelo plano (§4.3).
   writeFileSync(
     join(dir, MANIFEST_FILE),
     JSON.stringify({
+      manifestVersion: 2,
       configAdded: [
-        { path: "agent.implementer.permission", key: "bash" },
-        { path: "agent.verifier.permission", key: "bash" }
+        { agent: "implementer", action: "shell", resource: "*", effect: "allow" },
+        { agent: "verifier", action: "shell", resource: "*", effect: "allow" },
       ],
-      configManaged: []
     }),
     "utf8"
   );
@@ -162,8 +186,8 @@ test("installGlobal migra config antigo: remove bash per-agent e artefacto agent
       agent: {
         implementer: { permission: { bash: "allow", read: { "x/**": "allow" } } },
         verifier: { permission: { bash: "allow" } },
-        permission: { bash: "allow" }
-      }
+        permission: { bash: "allow" },
+      },
     }),
     "utf8"
   );
@@ -171,18 +195,33 @@ test("installGlobal migra config antigo: remove bash per-agent e artefacto agent
   const result = await installGlobal({ configDir: dir });
 
   const config = parseConfig(readFileSync(join(dir, "opencode.json"), "utf8"));
-  assert.equal(getPath(config, "agent.implementer.permission.bash"), undefined, "remove bash per-agent do implementer");
-  assert.equal(getPath(config, "agent.verifier.permission.bash"), undefined, "remove bash per-agent do verifier");
-  assert.equal(getPath(config, "agent.permission"), undefined, "remove artefacto inválido agent.permission");
-  assert.equal(getPath(config, "agent.implementer.permission.read")["x/**"], "allow", "preserva resto do user");
-  const bash = getPath(config, "permission.bash");
-  assert.equal(bash["*"], "allow");
-  assert.ok(result.configRemoved.includes("agent.implementer.permission.bash"));
-  assert.ok(result.configRemoved.includes("agent.verifier.permission.bash"));
-  assert.ok(result.configRemoved.includes("agent.permission"));
+  // As regras por-agente obsoletas (bash/shell) saem; o resto do utilizador fica.
+  assert.equal(
+    hasRule(config, "shell", "*", "implementer"),
+    false,
+    "remove a regra shell per-agent do implementer",
+  );
+  assert.equal(hasRule(config, "shell", "*", "verifier"), false, "remove a regra shell per-agent do verifier");
+  assert.equal(config.agents?.permission, undefined, "remove o artefacto inválido agents.permission");
+  assert.equal(
+    effectOf(config, "read", "x/**", "implementer"),
+    "allow",
+    "preserva a regra de leitura do utilizador",
+  );
+  // O `permission.bash` do utilizador migra para uma regra shell global — não é
+  // gerida por nós, por isso não é removida. As regras obsoletas são só as
+  // por-agente que o manifest registou como nossas.
+  assert.equal(effectOf(config, "shell", "*"), "allow");
+  assert.equal(config.permission, undefined, "a chave V1 `permission` desapareceu");
+  assert.ok(
+    result.configRemoved.includes("agent:implementer:shell|*"),
+    "regra por-agente do implementer removida",
+  );
+  assert.ok(result.configRemoved.includes("agent:verifier:shell|*"), "regra por-agente do verifier removida");
+  assert.ok(result.configRemoved.includes("agents.permission"));
 
   const manifest = await loadManifest(dir);
-  assert.ok(manifest.configRemoved.includes("agent.implementer.permission.bash"));
+  assert.ok(manifest.configRemoved.includes("agent:implementer:shell|*"));
 });
 
 test("uninstall remove só o que foi instalado e preserva o resto", async () => {
@@ -200,7 +239,7 @@ test("uninstall remove só o que foi instalado e preserva o resto", async () => 
   assert.ok(existsSync(join(dir, "agents", "meu-agente.md")));
 
   const config = parseConfig(readFileSync(join(dir, "opencode.json"), "utf8"));
-  assert.equal(getPath(config, "agent.loop-development"), undefined);
+  assert.ok(!rulesOf(config).some((r) => r.action === "shell"), "as regras geridas são removidas no uninstall");
   assert.ok(!existsSync(join(dir, MANIFEST_FILE)));
 });
 
@@ -235,18 +274,25 @@ test("installProject é idempotente", async () => {
   assert.equal(result.projectConfig.added, 0);
 });
 
-test("installProject adiciona session-titles.json ao .gitignore (aditivo e idempotente)", async () => {
+// O plano §4.1 moveu o estado do session-title para `ctx.storage` (durável e
+// scoped pelo plugin), pelo que a entrada `.loop-development/session-titles.json`
+// deixou de ser necessária no .gitignore. Este teste fixa essa decisão: o
+// installer só escreve as entradas de segredos (.env*).
+test("installProject escreve apenas as entradas de segredos no .gitignore (aditivo e idempotente)", async () => {
   const dir = tempDir();
   writeFileSync(join(dir, ".gitignore"), "node_modules/\n", "utf8");
 
   const result = await installProject({ targetDir: dir });
   assert.equal(result.gitignore, true);
   const first = readFileSync(join(dir, ".gitignore"), "utf8");
-  assert.ok(first.includes(".loop-development/session-titles.json"));
   assert.ok(first.includes("node_modules/"), "conteúdo pré-existente preservado");
+  assert.ok(
+    !first.includes("session-titles.json"),
+    "o estado do session-title vive em ctx.storage, não precisa de entrada no .gitignore",
+  );
 
   const second = await installProject({ targetDir: dir });
-  assert.equal(second.gitignore, false, "não duplica a entrada");
+  assert.equal(second.gitignore, false, "não duplica as entradas");
   assert.equal(readFileSync(join(dir, ".gitignore"), "utf8"), first);
 });
 
@@ -254,7 +300,8 @@ test("installProject cria .gitignore quando o projeto não tem um", async () => 
   const dir = tempDir();
   await installProject({ targetDir: dir });
   const content = readFileSync(join(dir, ".gitignore"), "utf8");
-  assert.ok(content.includes(".loop-development/session-titles.json"));
+  assert.ok(content.includes(".env"));
+  assert.ok(!content.includes("session-titles.json"), "sem a entrada removida em V2");
 });
 
 test("installProject garante .env* no .gitignore (M004)", async () => {
@@ -282,21 +329,21 @@ test("installProject grava grants de acesso no opencode.json do projeto", async 
 
   const config = parseConfig(readFileSync(join(dir, "opencode.json"), "utf8"));
   for (const name of ["loop-development", "intake", "implementer", "state-manager", "git-manager"]) {
-    const read = getPath(config, `agent.${name}.permission.read`);
-    assert.equal(read["*"], "allow", `${name}: read broad allow`);
-    assert.equal(read["*.env"], "ask", `${name}: .env protegido`);
-    assert.equal(read["*.env.*"], "ask", `${name}: .env.* protegido`);
-    assert.equal(read["*.env.example"], "allow", `${name}: .env.example continua legível`);
-    const glob = getPath(config, `agent.${name}.permission.glob`);
-    assert.equal(glob["*"], "allow", `${name}: glob broad allow`);
+    assert.equal(effectOf(config, "read", "*", name), "allow", `${name}: read broad allow`);
+    assert.equal(effectOf(config, "read", "*.env", name), "ask", `${name}: .env protegido`);
+    assert.equal(effectOf(config, "read", "*.env.*", name), "ask", `${name}: .env.* protegido`);
+    assert.equal(effectOf(config, "read", "*.env.example", name), "allow", `${name}: .env.example legível`);
+    assert.equal(effectOf(config, "glob", "*", name), "allow", `${name}: glob broad allow`);
+    // No V2 a ordem é significativa: o catch-all allow precede as excepções.
+    const read = rulesOf(config, name).filter((r) => r.action === "read");
+    assert.equal(read[0].resource, "*", `${name}: broad antes das excepções`);
   }
   for (const name of ["implementer", "test-writer", "refactorer", "documentation-writer"]) {
-    const edit = getPath(config, `agent.${name}.permission.edit`);
-    assert.equal(edit["*"], "allow", `${name}: edit allow`);
-    assert.equal(edit["*.env"], "ask", `${name}: edit .env protegido`);
+    assert.equal(effectOf(config, "edit", "*", name), "allow", `${name}: edit allow`);
+    assert.equal(effectOf(config, "edit", "*.env", name), "ask", `${name}: edit .env protegido`);
   }
   for (const name of ["intake", "state-manager", "git-manager", "verifier"]) {
-    assert.equal(getPath(config, `agent.${name}.permission.edit`), undefined, `${name}: sem edit`);
+    assert.equal(hasRule(config, "edit", "*", name), false, `${name}: sem edit`);
   }
 });
 
@@ -314,9 +361,9 @@ test("installProject é aditivo — não sobrepõe regras existentes do projeto"
   assert.ok(result.projectConfig.backup, "faz backup do config existente");
   assert.ok(existsSync(result.projectConfig.backup));
   const config = parseConfig(readFileSync(join(dir, "opencode.json"), "utf8"));
-  assert.equal(getPath(config, "agent.implementer.permission.read.*"), "ask", "regra do utilizador preservada");
+  assert.equal(effectOf(config, "read", "*", "implementer"), "ask", "regra do utilizador preservada");
   assert.equal(config.custom, 1, "resto do config preservado");
-  assert.equal(getPath(config, "agent.intake.permission.read.*"), "allow", "grants aplicados aos restantes");
+  assert.equal(effectOf(config, "read", "*", "intake"), "allow", "grants aplicados aos restantes");
 });
 
 test("installProject --dry-run não escreve o opencode.json do projeto", async () => {

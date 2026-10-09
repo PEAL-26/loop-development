@@ -18,6 +18,9 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npm test
+      # Os .ts dos plugins nunca tinham sido typecheckados (não havia tsconfig).
+      # Agora que existe, o gate tem de o correr.
+      - run: npm run typecheck
       - run: npm pack --dry-run
 
   release:

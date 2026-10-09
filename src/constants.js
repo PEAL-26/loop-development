@@ -17,10 +17,19 @@ export const INTERNAL_READ_AGENTS = [
   "git-manager"
 ];
 
+// Acções de permissão (nomes V2). `edit` cobre edit/write/patch.
 export const PERMISSION_KEYS = ["read", "edit", "glob"];
 
+// Renomeações de acção V1 → V2 aplicadas na migração do config.
+export const ACTION_RENAMES = {
+  bash: "shell",
+  task: "subagent",
+  write: "edit",
+  patch: "edit"
+};
+
 // Agentes cujo bash per-agent era gerido pelo installer em versões antigas
-// (necessário para a migração remover essas chaves e o default global valer).
+// (necessário para a migração remover essas regras e o default global valer).
 export const OBSOLETE_BASH_AGENTS = [
   "implementer",
   "refactorer",
@@ -33,16 +42,17 @@ export const OBSOLETE_BASH_AGENTS = [
 
 export const STALE_AGENT_KEYS = ["implementer", "verifier", "loop-triage"];
 
-// Mapa de permissões de ficheiros que o installProject grava no opencode.json
-// do projeto (read/glob para todos os agentes, edit para quem escreve código).
-// Espelha os defaults do opencode para .env: o broad "*" allow vem primeiro e
-// as exceções específicas depois — a última regra que casa ganha.
-export const PROJECT_GRANT_MAP = {
-  "*": "allow",
-  "*.env": "ask",
-  "*.env.*": "ask",
-  "*.env.example": "allow"
-};
+// Grants de acesso ao projeto, como regras ordenadas de permissão. Espelham os
+// defaults do opencode para .env: a regra broad "*" allow vem primeiro e as
+// excepções específicas depois, porque no V2 vale a última regra que casa.
+export function projectGrantRules(action) {
+  return [
+    { action, resource: "*", effect: "allow" },
+    { action, resource: "*.env", effect: "ask" },
+    { action, resource: "*.env.*", effect: "ask" },
+    { action, resource: "*.env.example", effect: "allow" }
+  ];
+}
 
 // Agentes que escrevem ficheiros do projeto (código, testes, docs) e recebem
 // edit em allow no opencode.json do projeto; os restantes só read/glob.

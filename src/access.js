@@ -2,7 +2,15 @@ import { homedir } from "node:os";
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { resolve, join, sep } from "node:path";
-import { findConfigFile, parseConfig, serializeConfig } from "./merge-config.js";
+import {
+  findConfigFile,
+  parseConfig,
+  serializeConfig,
+  readRules,
+  writeRules,
+  insertRule,
+  removeRule,
+} from "./merge-config.js";
 
 export const ALLOWED_FOLDERS_FILE = "allowed-folders.json";
 
@@ -88,41 +96,34 @@ function backupPath(file) {
   return existsSync(base) ? `${base}.${Date.now()}` : base;
 }
 
-function ensureExternalDirectory(config) {
-  if (config.permission == null || typeof config.permission !== "object") config.permission = {};
-  const map = config.permission.external_directory;
-  if (map == null || typeof map !== "object") config.permission.external_directory = {};
-  return config.permission.external_directory;
-}
+// No V2 as regras external_directory vivem no array `permissions` de topo, com
+// action "external_directory" e o caminho como resource. O OpenCode expande ~
+// e $HOME em recursos external_directory, por isso guardamos o caminho tal e
+// qual.
 
-// Merge aditivo de padrões em permission.external_directory. Nunca remove nem
-// sobrepõe entradas que já existam (preserva regras manuais do utilizador).
+// Merge aditivo. Nunca remove nem sobrepõe regras que já existam — preserva as
+// regras manuais do utilizador.
 export function addExternalDirectoryPatterns(config, patterns) {
-  const map = ensureExternalDirectory(config);
+  let rules = readRules(config, { agent: null });
   const added = [];
   for (const p of patterns) {
-    if (!(p in map)) {
-      map[p] = "allow";
-      added.push(p);
-    }
+    const result = insertRule(rules, { action: "external_directory", resource: p, effect: "allow" });
+    if (result.inserted) added.push(p);
+    rules = result.rules;
   }
+  writeRules(config, { agent: null }, rules);
   return { changed: added.length > 0, config, added };
 }
 
 export function removeExternalDirectoryPatterns(config, patterns) {
-  const map = config?.permission?.external_directory;
-  if (map == null || typeof map !== "object") return { changed: false, config, removed: [] };
+  let rules = readRules(config, { agent: null });
   const removed = [];
   for (const p of patterns) {
-    if (p in map) {
-      delete map[p];
-      removed.push(p);
-    }
+    const result = removeRule(rules, { action: "external_directory", resource: p, effect: "allow" });
+    if (result.removed) removed.push(p);
+    rules = result.rules;
   }
-  if (Object.keys(map).length === 0) {
-    delete config.permission.external_directory;
-    if (Object.keys(config.permission).length === 0) delete config.permission;
-  }
+  writeRules(config, { agent: null }, rules);
   return { changed: removed.length > 0, config, removed };
 }
 
@@ -150,21 +151,21 @@ export const INTERNAL_STATE_AGENTS = [
 ];
 
 // Alarga read/glob/edit (quando presentes) com `**/.loop-development/**` para
-// os agentes internos que não tenham já "*": "allow". Defensivo: em projetos
-// normais o installProject já dá "*": "allow" e isto é um no-op.
+// os agentes internos que não tenham já uma regra "*" allow. Defensivo: em
+// projetos normais o installProject já dá "*" allow e isto é um no-op.
 export function extendLoopDevPatterns(config) {
   const added = [];
   for (const agent of INTERNAL_STATE_AGENTS) {
-    const perm = config?.agent?.[agent]?.permission;
-    if (perm == null || typeof perm !== "object") continue;
-    for (const key of ["read", "glob", "edit"]) {
-      const map = perm[key];
-      if (map == null || typeof map !== "object") continue;
-      if ("*" in map) continue;
-      if (!("**/.loop-development/**" in map)) {
-        map["**/.loop-development/**"] = "allow";
-        added.push(`agent.${agent}.permission.${key}`);
-      }
+    for (const action of ["read", "glob", "edit"]) {
+      const scope = { agent };
+      const rules = readRules(config, scope);
+      // Uma regra "*" allow já cobre tudo; o objectivo do alargamento é
+      // exactamente o caso em que o "*" não existe.
+      if (rules.some((r) => r?.action === action && r?.resource === "*")) continue;
+      const result = insertRule(rules, { action, resource: "**/.loop-development/**", effect: "allow" });
+      if (!result.inserted) continue;
+      writeRules(config, scope, result.rules);
+      added.push(`${agent}:${action}`);
     }
   }
   return { changed: added.length > 0, config, added };
@@ -173,15 +174,17 @@ export function extendLoopDevPatterns(config) {
 export function shrinkLoopDevPatterns(config) {
   const removed = [];
   for (const agent of INTERNAL_STATE_AGENTS) {
-    const perm = config?.agent?.[agent]?.permission;
-    if (perm == null || typeof perm !== "object") continue;
-    for (const key of ["read", "glob", "edit"]) {
-      const map = perm[key];
-      if (map == null || typeof map !== "object") continue;
-      if ("**/.loop-development/**" in map) {
-        delete map["**/.loop-development/**"];
-        removed.push(`agent.${agent}.permission.${key}`);
-      }
+    for (const action of ["read", "glob", "edit"]) {
+      const scope = { agent };
+      const rules = readRules(config, scope);
+      const result = removeRule(rules, {
+        action,
+        resource: "**/.loop-development/**",
+        effect: "allow",
+      });
+      if (!result.removed) continue;
+      writeRules(config, scope, result.rules);
+      removed.push(`${agent}:${action}`);
     }
   }
   return { changed: removed.length > 0, config, removed };

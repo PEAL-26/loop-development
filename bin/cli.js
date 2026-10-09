@@ -9,6 +9,7 @@ import { DEFAULT_MODELS, TIERS, setModel, setModels } from "../src/set-model.js"
 import { auditInstalledModels } from "../src/models.js";
 import { migrateProject } from "../src/plan.js";
 import { checkArchitecture } from "../src/architecture.js";
+import { doctor } from "../src/doctor.js";
 import { BACKEND_PRESETS, FRONTEND_PRESETS, PACKAGE_MANAGERS, findPreset, detectPackageManager, isValidPm } from "../src/presets.js";
 import { telegramSetup, telegramStatus, telegramReset } from "../src/telegram.js";
 import { addAllowedFolder, removeAllowedFolder, listAllowedFolders, clearAllowedFolders } from "../src/access.js";
@@ -56,6 +57,12 @@ Uso:
   npx loop-development migrate [<dir>]
       Converte um projeto no formato antigo (.loop-development/ flat) para a
       estrutura nova por planos (plans/<timestamp>-projeto-inicial/).
+
+  npx loop-development doctor [--fix] [--dir <dir>] [--config-dir <dir>]
+      Diagnostica a instalação contra o OpenCode V2: versão do OpenCode, manifesto
+      e ficheiros em dia, forma do config (V1 vs V2), frontmatter dos agentes,
+      plugins (default export + log do OpenCode) e dependências.
+      Sai com código != 0 se algo estiver errado. Com --fix repara o automático.
 
   npx loop-development architecture check [<dir>]
       Audita .loop-development/architecture.md contra o contrato de arquitetura
@@ -109,7 +116,7 @@ Opções:
   --help, -h           Mostra esta ajuda
   --version, -v        Mostra a versão`;
 function parseFlags(args) {
-  const flags = { yes: false, force: false, dryRun: false, configDir: null, project: false, help: false, version: false, backend: null, frontend: null, pm: null, listPresets: false, token: null, pairingKey: null, reset: false, noLink: false, modelAll: null, modelDefaults: false, modelTiers: {}, history: false, tool: null };
+  const flags = { yes: false, force: false, dryRun: false, configDir: null, project: false, help: false, version: false, backend: null, frontend: null, pm: null, listPresets: false, token: null, pairingKey: null, reset: false, noLink: false, modelAll: null, modelDefaults: false, modelTiers: {}, history: false, tool: null, fix: false, dir: null };
   const rest = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -146,6 +153,13 @@ function parseFlags(args) {
       case "--config-dir":
         flags.configDir = args[++i];
         if (!flags.configDir) throw new Error("--config-dir requer um valor");
+        break;
+      case "--fix":
+        flags.fix = true;
+        break;
+      case "--dir":
+        flags.dir = args[++i];
+        if (!flags.dir) throw new Error("--dir requer um valor");
         break;
       case "--token":
         flags.token = args[++i];
@@ -396,6 +410,18 @@ async function runMigrate(rest, flags) {
   return 0;
 }
 
+// Diagnóstico completo da instalação V2. Sai com código != 0 se algo estiver
+// errado, para ser usável em CI e em scripts.
+async function runDoctor(flags) {
+  const result = await doctor({
+    configDir: flags.configDir,
+    cwd: flags.dir ?? undefined,
+    fix: flags.fix,
+    dryRun: flags.dryRun,
+  });
+  return result.ok ? 0 : 1;
+}
+
 async function runArchitecture(rest, flags) {
   const sub = rest[1];
   if (sub !== "check") {
@@ -587,6 +613,8 @@ async function main() {
       case "status":
         await status({ configDir: flags.configDir });
         return 0;
+      case "doctor":
+        return await runDoctor(flags);
       case "set-model":
         return await runSetModel(rest, flags);
       case "set-mode":

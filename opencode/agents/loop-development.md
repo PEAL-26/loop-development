@@ -3,37 +3,91 @@ description: Orquestrador autónomo que conduz todo o ciclo de desenvolvimento d
 mode: primary
 model: opencode/big-pickle
 # tier: reasoning
-temperature: 0.2
-tools:
-  write: false
-  edit: false
-  patch: false
-permission:
-  edit: deny
-  webfetch: allow
-  question: allow
-  task:
-    "*": deny
-    intake: allow
-    grill-me: allow
-    researcher: allow
-    planner: allow
-    planner-writer: allow
-    architecture-reviewer: allow
-    task-generator: allow
-    dependency-auditor: allow
-    context-loader: allow
-    implementer: allow
-    refactorer: allow
-    test-writer: allow
-    verifier: allow
-    security-auditor: allow
-    performance-auditor: allow
-    documentation-writer: allow
-    git-manager: allow
-    state-manager: allow
-    compacter: allow
-    final-reviewer: allow
+request:
+  body:
+    temperature: 0.2
+permissions:
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: webfetch
+    resource: "*"
+    effect: allow
+  - action: question
+    resource: "*"
+    effect: allow
+  - action: subagent
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: intake
+    effect: allow
+  - action: subagent
+    resource: grill-me
+    effect: allow
+  - action: subagent
+    resource: researcher
+    effect: allow
+  - action: subagent
+    resource: planner
+    effect: allow
+  - action: subagent
+    resource: planner-writer
+    effect: allow
+  - action: subagent
+    resource: architecture-reviewer
+    effect: allow
+  - action: subagent
+    resource: task-generator
+    effect: allow
+  - action: subagent
+    resource: dependency-auditor
+    effect: allow
+  - action: subagent
+    resource: context-loader
+    effect: allow
+  - action: subagent
+    resource: implementer
+    effect: allow
+  - action: subagent
+    resource: refactorer
+    effect: allow
+  - action: subagent
+    resource: test-writer
+    effect: allow
+  - action: subagent
+    resource: verifier
+    effect: allow
+  - action: subagent
+    resource: security-auditor
+    effect: allow
+  - action: subagent
+    resource: performance-auditor
+    effect: allow
+  - action: subagent
+    resource: documentation-writer
+    effect: allow
+  - action: subagent
+    resource: git-manager
+    effect: allow
+  - action: subagent
+    resource: state-manager
+    effect: allow
+  - action: subagent
+    resource: compacter
+    effect: allow
+  - action: subagent
+    resource: final-reviewer
+    effect: allow
+  - action: read
+    resource: ".loop-development/**"
+    effect: allow
+  - action: glob
+    resource: ".loop-development/**"
+    effect: allow
+  - action: edit
+    resource: ".loop-development/**"
+    effect: allow
 ---
 
 # Loop Development — Orquestrador

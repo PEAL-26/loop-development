@@ -117,7 +117,7 @@ export function decideAction({ config, agent, activePlan, currentTitle, lastSetT
 }
 
 // ---------------------------------------------------------------------------
-// Estado persistente: .loop-development/session-titles.json
+// Estado persistente: ctx.storage (JSON durável, scoped pelo id do plugin)
 // { version: 1, titles: { [sessionID]: { title, plan, updatedAt } } }
 // ---------------------------------------------------------------------------
 
@@ -125,20 +125,17 @@ export function emptyState() {
   return { version: 1, titles: {} };
 }
 
-export function parseState(text) {
-  try {
-    const parsed = JSON.parse(String(text ?? ""));
-    return {
-      version: 1,
-      titles: parsed && typeof parsed.titles === "object" && parsed.titles ? parsed.titles : {},
-    };
-  } catch {
-    return emptyState();
-  }
-}
-
-export function serializeState(state) {
-  return JSON.stringify(state ?? emptyState(), null, 2) + "\n";
+// Ao contrário do V1 (que lia/escrevia .loop-development/session-titles.json),
+// o estado vive em ctx.storage e já vem deserializado. Normalizamos em vez de
+// parsear texto, e nunca lançamos: um estado corrompido apenas perde o histórico
+// de títulos, que o plugin reconstrói sozinho.
+export function normalizeState(value) {
+  if (value == null || typeof value !== "object") return emptyState();
+  const titles = value.titles;
+  return {
+    version: 1,
+    titles: titles != null && typeof titles === "object" ? { ...titles } : {},
+  };
 }
 
 export function lastTitleFor(state, sessionID) {

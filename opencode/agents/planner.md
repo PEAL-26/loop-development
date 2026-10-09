@@ -3,10 +3,22 @@ description: Cria o plano macro do projeto ou funcionalidade a partir do pedido 
 mode: subagent
 model: opencode/big-pickle
 # tier: reasoning
-temperature: 0.3
-permission:
-  edit: allow
-  webfetch: deny
+request:
+  body:
+    temperature: 0.3
+permissions:
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: webfetch
+    resource: "*"
+    effect: deny
+  - action: read
+    resource: ".loop-development/**"
+    effect: allow
+  - action: glob
+    resource: ".loop-development/**"
+    effect: allow
 ---
 
 # Planner

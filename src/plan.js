@@ -134,7 +134,10 @@ async function ensureProjectState(targetDir, legacyState, planIdValue, date) {
   await writeFile(join(root, "state.json"), JSON.stringify(projectState, null, 2) + "\n", "utf8");
 }
 
-export async function migrateProject({ targetDir = process.cwd(), dryRun = false, log = () => {} } = {}) {
+// `date` é aceite para tornar o resultado determinístico (id do plano e shard
+// mensal do log). Sem ele, uma migração feita emOctober produz um shard diferente
+// do que o mesmo estado migrado noutro mês — o que torna o teste flaky por data.
+export async function migrateProject({ targetDir = process.cwd(), dryRun = false, date = new Date(), log = () => {} } = {}) {
   const root = join(targetDir, ".loop-development");
   if (!existsSync(root)) {
     throw new Error(`Sem .loop-development/ em ${targetDir} — nada a migrar.`);
@@ -144,7 +147,6 @@ export async function migrateProject({ targetDir = process.cwd(), dryRun = false
     return { id: null, migrated: false };
   }
 
-  const date = now();
   const id = planId(date, "projeto-inicial");
   const planDir = join(root, "plans", id);
   const legacyState = readJsonSync(join(root, "state.json"));

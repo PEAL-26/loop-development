@@ -20,14 +20,22 @@ export async function getStatus({ configDir, projectDir = process.cwd() } = {}) 
 
   const configFile = findConfigFile(dir);
   let configEntries = null;
+  let legacyKeys = [];
   if (existsSync(configFile)) {
     try {
       const config = parseConfig(await readFile(configFile, "utf8"));
-      const task = getPath(config, "agent.loop-development.permission.task");
-      const hasManaged = (manifest.configAdded?.length ?? 0) + (manifest.configManaged?.length ?? 0) > 0;
-      configEntries = hasManaged
-        ? (manifest.configAdded?.length ?? 0) + (manifest.configManaged?.length ?? 0)
-        : task ? Object.keys(task).length : 0;
+      // Permissões V2 são uma lista ordenada; as regras do orquestrador sobre
+      // subagents é o que interessa para dizer se o config está povoado.
+      const rules = config?.agents?.["loop-development"]?.permissions;
+      const managed = (manifest.configAdded?.length ?? 0) + (manifest.configConflicts?.length ?? 0);
+      configEntries =
+        managed > 0
+          ? managed
+          : Array.isArray(rules)
+            ? rules.filter((r) => r?.action === "subagent").length
+            : 0;
+      if (config?.agent != null) legacyKeys.push("agent");
+      if (config?.permission != null) legacyKeys.push("permission");
     } catch {
       configEntries = "erro de leitura";
     }
@@ -81,7 +89,7 @@ export async function getStatus({ configDir, projectDir = process.cwd() } = {}) 
     }
   }
 
-  return { configDir: dir, packageVersion: pkg.version, installedVersion: manifest.version, agents, commands, configEntries, configRemoved: manifest.configRemoved ?? [], projectState, activePlanState, manifestExists: (manifest.files?.length ?? 0) > 0, allowedFolders };
+  return { configDir: dir, packageVersion: pkg.version, installedVersion: manifest.version, agents, commands, configEntries, configRemoved: manifest.configRemoved ?? [], legacyKeys, projectState, activePlanState, manifestExists: (manifest.files?.length ?? 0) > 0, allowedFolders };
 }
 
 export async function status(opts) {
@@ -93,6 +101,11 @@ export async function status(opts) {
     lines.push(`Agentes instalados: ${data.agents}`);
     lines.push(`Comandos instalados: ${data.commands}`);
     lines.push(`Entradas geridas no config: ${data.configEntries === null ? "nenhuma" : data.configEntries}`);
+    if ((data.legacyKeys?.length ?? 0) > 0) {
+      lines.push(
+        `Config ainda em formato V1 (${data.legacyKeys.join(", ")}) — corre 'npx loop-development update' para migrar, ou 'doctor'`,
+      );
+    }
     const removed = data.configRemoved?.length ?? 0;
     if (removed > 0) lines.push(`Entries stale removidos: ${removed}`);
   } else {

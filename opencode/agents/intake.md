@@ -3,10 +3,22 @@ description: Normaliza o pedido inicial do utilizador, garante que a estrutura .
 mode: subagent
 model: opencode/deepseek-v4-flash-free
 # tier: mechanical
-temperature: 0.1
-permission:
-  edit: allow
-  webfetch: deny
+request:
+  body:
+    temperature: 0.1
+permissions:
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: webfetch
+    resource: "*"
+    effect: deny
+  - action: read
+    resource: ".loop-development/**"
+    effect: allow
+  - action: glob
+    resource: ".loop-development/**"
+    effect: allow
 ---
 
 # Intake

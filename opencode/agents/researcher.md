@@ -3,10 +3,22 @@ description: Consulta documentação oficial das tecnologias envolvidas, breakin
 mode: subagent
 model: opencode/big-pickle
 # tier: reasoning
-temperature: 0.1
-permission:
-  edit: deny
-  webfetch: allow
+request:
+  body:
+    temperature: 0.1
+permissions:
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: webfetch
+    resource: "*"
+    effect: allow
+  - action: read
+    resource: ".loop-development/**"
+    effect: allow
+  - action: glob
+    resource: ".loop-development/**"
+    effect: allow
 ---
 
 # Researcher

@@ -3,11 +3,25 @@ description: Audita o código implementado na tarefa atual à procura de vulnera
 mode: subagent
 model: opencode/big-pickle
 # tier: reasoning
-temperature: 0.1
-permission:
-  read: allow
-  edit: deny
-  webfetch: deny
+request:
+  body:
+    temperature: 0.1
+permissions:
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: webfetch
+    resource: "*"
+    effect: deny
+  - action: read
+    resource: ".loop-development/**"
+    effect: allow
+  - action: glob
+    resource: ".loop-development/**"
+    effect: allow
 ---
 
 # Security Auditor

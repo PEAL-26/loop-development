@@ -3,10 +3,22 @@ description: Executa as verificações objetivas (testes, typecheck, lint, forma
 mode: subagent
 model: opencode/deepseek-v4-flash-free
 # tier: mechanical
-temperature: 0.1
-permission:
-  edit: deny
-  webfetch: deny
+request:
+  body:
+    temperature: 0.1
+permissions:
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: webfetch
+    resource: "*"
+    effect: deny
+  - action: read
+    resource: ".loop-development/**"
+    effect: allow
+  - action: glob
+    resource: ".loop-development/**"
+    effect: allow
 ---
 
 # Verifier

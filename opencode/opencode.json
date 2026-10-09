@@ -1,150 +1,41 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "agent": {
-    "loop-development": {
-      "permission": {
-        "task": {
-          "*": "deny",
-          "intake": "allow",
-          "grill-me": "allow",
-          "researcher": "allow",
-          "planner": "allow",
-          "planner-writer": "allow",
-          "architecture-reviewer": "allow",
-          "task-generator": "allow",
-          "dependency-auditor": "allow",
-          "context-loader": "allow",
-          "implementer": "allow",
-          "refactorer": "allow",
-          "test-writer": "allow",
-          "verifier": "allow",
-          "security-auditor": "allow",
-          "performance-auditor": "allow",
-          "documentation-writer": "allow",
-          "git-manager": "allow",
-          "state-manager": "allow",
-          "compacter": "allow",
-          "final-reviewer": "allow"
-        },
-        "read": { ".loop-development/**": "allow" },
-        "edit": { ".loop-development/**": "allow" },
-        "glob": { ".loop-development/**": "allow" },
-        "question": "allow"
-      }
-    },
-    "context-loader": {
-      "permission": {
-        "read": { ".loop-development/**": "allow" },
-        "edit": { ".loop-development/**": "allow" },
-        "glob": { ".loop-development/**": "allow" }
-      }
-    },
-    "state-manager": {
-      "permission": {
-        "read": { ".loop-development/**": "allow" },
-        "edit": { ".loop-development/**": "allow" },
-        "glob": { ".loop-development/**": "allow" }
-      }
-    },
-    "planner-writer": {
-      "permission": {
-        "read": { ".loop-development/**": "allow" },
-        "edit": { ".loop-development/**": "allow" },
-        "glob": { ".loop-development/**": "allow" }
-      }
-    },
-    "task-generator": {
-      "permission": {
-        "read": { ".loop-development/**": "allow" },
-        "edit": { ".loop-development/**": "allow" },
-        "glob": { ".loop-development/**": "allow" }
-      }
-    },
-    "compacter": {
-      "permission": {
-        "read": { ".loop-development/**": "allow" },
-        "edit": { ".loop-development/**": "allow" },
-        "glob": { ".loop-development/**": "allow" }
-      }
-    },
-    "refactorer": {
-      "permission": {
-        "read": { ".loop-development/**": "allow" },
-        "edit": { ".loop-development/**": "allow" },
-        "glob": { ".loop-development/**": "allow" }
-      }
-    },
-    "implementer": {
-      "permission": {
-        "read": { ".loop-development/**": "allow" },
-        "glob": { ".loop-development/**": "allow" }
-      }
-    },
-    "test-writer": {
-      "permission": {
-        "read": { ".loop-development/**": "allow" },
-        "glob": { ".loop-development/**": "allow" }
-      }
-    },
-    "git-manager": {
-      "permission": {
-        "read": { ".loop-development/**": "allow" },
-        "glob": { ".loop-development/**": "allow" }
-      }
-    },
-    "documentation-writer": {
-      "permission": {
-        "read": { ".loop-development/**": "allow" },
-        "edit": { ".loop-development/**": "allow" },
-        "glob": { ".loop-development/**": "allow" }
-      }
-    },
-    "final-reviewer": {
-      "permission": {
-        "read": { ".loop-development/**": "allow" },
-        "edit": { ".loop-development/**": "allow" },
-        "glob": { ".loop-development/**": "allow" }
-      }
-    }
-  },
-  "permission": {
-    "bash": {
-      "*": "allow",
-      "git push*": "ask",
-      "git reset --hard*": "ask",
-      "git clean*": "ask",
-      "git checkout*": "ask",
-      "git switch*": "ask",
-      "git rebase*": "ask",
-      "git merge*": "ask",
-      "git branch -D*": "ask",
-      "git stash drop*": "ask",
-      "rm *": "ask",
-      "rmdir *": "ask",
-      "unlink *": "ask",
-      "truncate *": "ask",
-      "sudo *": "ask",
-      "shutdown*": "ask",
-      "reboot*": "ask",
-      "poweroff*": "ask",
-      "kill -9*": "ask",
-      "pkill *": "ask",
-      "killall *": "ask",
-      "dd *": "ask",
-      "mkfs*": "ask",
-      "fdisk*": "ask",
-      "npm uninstall*": "ask",
-      "yarn remove*": "ask",
-      "pnpm remove*": "ask",
-      "bun remove*": "ask",
-      "pip uninstall*": "ask",
-      "docker rm*": "ask",
-      "docker rmi*": "ask",
-      "docker system prune*": "ask",
-      "docker volume rm*": "ask",
-      "docker compose down*": "ask",
-      "terraform destroy*": "ask",
-      "tofu destroy*": "ask"
-    }
-  }
+  "permissions": [
+    { "action": "shell", "resource": "*", "effect": "allow" },
+    { "action": "shell", "resource": "git push*", "effect": "ask" },
+    { "action": "shell", "resource": "git reset --hard*", "effect": "ask" },
+    { "action": "shell", "resource": "git clean*", "effect": "ask" },
+    { "action": "shell", "resource": "git checkout*", "effect": "ask" },
+    { "action": "shell", "resource": "git switch*", "effect": "ask" },
+    { "action": "shell", "resource": "git rebase*", "effect": "ask" },
+    { "action": "shell", "resource": "git merge*", "effect": "ask" },
+    { "action": "shell", "resource": "git branch -D*", "effect": "ask" },
+    { "action": "shell", "resource": "git stash drop*", "effect": "ask" },
+    { "action": "shell", "resource": "rm *", "effect": "ask" },
+    { "action": "shell", "resource": "rmdir *", "effect": "ask" },
+    { "action": "shell", "resource": "unlink *", "effect": "ask" },
+    { "action": "shell", "resource": "truncate *", "effect": "ask" },
+    { "action": "shell", "resource": "sudo *", "effect": "ask" },
+    { "action": "shell", "resource": "shutdown*", "effect": "ask" },
+    { "action": "shell", "resource": "reboot*", "effect": "ask" },
+    { "action": "shell", "resource": "poweroff*", "effect": "ask" },
+    { "action": "shell", "resource": "kill -9*", "effect": "ask" },
+    { "action": "shell", "resource": "pkill *", "effect": "ask" },
+    { "action": "shell", "resource": "killall *", "effect": "ask" },
+    { "action": "shell", "resource": "dd *", "effect": "ask" },
+    { "action": "shell", "resource": "mkfs*", "effect": "ask" },
+    { "action": "shell", "resource": "fdisk*", "effect": "ask" },
+    { "action": "shell", "resource": "npm uninstall*", "effect": "ask" },
+    { "action": "shell", "resource": "yarn remove*", "effect": "ask" },
+    { "action": "shell", "resource": "pnpm remove*", "effect": "ask" },
+    { "action": "shell", "resource": "bun remove*", "effect": "ask" },
+    { "action": "shell", "resource": "pip uninstall*", "effect": "ask" },
+    { "action": "shell", "resource": "docker rm*", "effect": "ask" },
+    { "action": "shell", "resource": "docker rmi*", "effect": "ask" },
+    { "action": "shell", "resource": "docker system prune*", "effect": "ask" },
+    { "action": "shell", "resource": "docker volume rm*", "effect": "ask" },
+    { "action": "shell", "resource": "docker compose down*", "effect": "ask" },
+    { "action": "shell", "resource": "terraform destroy*", "effect": "ask" },
+    { "action": "shell", "resource": "tofu destroy*", "effect": "ask" }
+  ]
 }

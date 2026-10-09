@@ -3,10 +3,25 @@ description: Atualiza README, CHANGELOG, documentação de API e ADRs (plans/<id
 mode: subagent
 model: opencode/ling-3.0-tiny-free
 # tier: docs
-temperature: 0.1
-permission:
-  edit: allow
-  webfetch: deny
+request:
+  body:
+    temperature: 0.1
+permissions:
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: webfetch
+    resource: "*"
+    effect: deny
+  - action: read
+    resource: ".loop-development/**"
+    effect: allow
+  - action: glob
+    resource: ".loop-development/**"
+    effect: allow
+  - action: edit
+    resource: ".loop-development/**"
+    effect: allow
 ---
 
 # Documentation Writer
