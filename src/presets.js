@@ -13,6 +13,9 @@ export const BACKEND_PRESETS = [
   {
     id: "nestjs-prisma",
     label: "NestJS + Prisma",
+    // Módulos da skill project-rules aplicáveis a esta stack (M008). O
+    // "general/" é sempre carregado e por isso não se repete aqui.
+    rules: ["backend/nestjs", "backend/prisma"],
     stack: "NestJS 11 (Express) + Prisma 7 + PostgreSQL (ou SQLite/MySQL via datasource). TypeScript, Node >= 20. Gestor de pacotes: {pm}.",
     conventions: [
       "Estrutura por feature modules: src/modules/<feature>/ com .module.ts, .controller.ts, .service.ts e dto/*.dto.ts; código partilhado em src/common/; config em src/config/.",
@@ -61,6 +64,7 @@ export const BACKEND_PRESETS = [
   {
     id: "nestjs-supabase",
     label: "NestJS + Supabase",
+    rules: ["backend/nestjs", "backend/supabase"],
     stack: "NestJS 11 (Express) + Supabase (Postgres + Auth + Storage + RLS). TypeScript, Node >= 20. Gestor de pacotes: {pm}.",
     conventions: [
       "Estrutura por feature modules: src/modules/<feature>/ com .module.ts, .controller.ts, .service.ts e dto/*.dto.ts; código partilhado em src/common/; config em src/config/.",
@@ -110,6 +114,7 @@ export const BACKEND_PRESETS = [
   {
     id: "express",
     label: "Node.js + Express",
+    rules: ["backend/express-fastify"],
     stack: "Node.js >= 22 + Express 5 + TypeScript. Gestor de pacotes: {pm}.",
     conventions: [
       "Handlers async não precisam de try/catch nem wrapper no Express 5: rejected promises são encaminhadas automaticamente como next(err) — sem asyncHandler/catchAsync.",
@@ -151,6 +156,7 @@ export const BACKEND_PRESETS = [
   {
     id: "fastify",
     label: "Fastify",
+    rules: ["backend/express-fastify"],
     stack: "Fastify 5 + TypeScript (scaffold fastify-cli). Gestor de pacotes: {pm}.",
     conventions: [
       "Validação via @fastify/type-provider-zod (requer Zod >= 4.2) com withTypeProvider<ZodTypeProvider>() e setValidatorCompiler/setSerializerCompiler; serialização derivada de z.output.",
@@ -187,6 +193,7 @@ export const FRONTEND_PRESETS = [
   {
     id: "expo",
     label: "Expo (React Native)",
+    rules: ["frontend/expo-mobile", "frontend/components", "frontend/forms"],
     stack: "Expo SDK 55 (React Native) + Expo Router + TypeScript strict. Gestor de pacotes: {pm}.",
     conventions: [
       "Rotas por ficheiros em src/app/ (cada ficheiro = rota), _layout.tsx raiz, route groups (tabs); typed routes geradas em .expo/types.",
@@ -226,6 +233,7 @@ export const FRONTEND_PRESETS = [
   {
     id: "next",
     label: "Next.js",
+    rules: ["frontend/nextjs-frontend", "frontend/components", "frontend/forms"],
     stack: "Next.js 16 (App Router) + React 19 + TypeScript + Tailwind. Gestor de pacotes: {pm}.",
     conventions: [
       "Layouts e pages são Server Components por default; 'use client' só quando necessário (marca o boundary no topo do ficheiro).",
@@ -264,6 +272,7 @@ export const FRONTEND_PRESETS = [
   {
     id: "vite",
     label: "React + Vite",
+    rules: ["frontend/vite-spa", "frontend/components", "frontend/forms"],
     stack: "React + Vite + TypeScript (create-vite react-ts). Gestor de pacotes: {pm}.",
     conventions: [
       "ESLint flat config (eslint.config.js): js.recommended + tseslint.recommended + reactHooks + reactRefresh; usar recommendedTypeChecked para rigor.",
@@ -317,6 +326,14 @@ export function isValidPm(id) {
   return id == null || PACKAGE_MANAGERS.some((p) => p.id === id);
 }
 
+// Módulos da skill project-rules que os presets escolhidos pedem (M008). A
+// união é o que o bloco "Regras da casa" do AGENTS.md vai listar.
+export function presetRules(backend = null, frontend = null) {
+  const b = backend ? findPreset("backend", backend) : null;
+  const f = frontend ? findPreset("frontend", frontend) : null;
+  return [...new Set([...(b?.rules ?? []), ...(f?.rules ?? [])])];
+}
+
 export async function detectPackageManager(targetDir = process.cwd()) {
   const lockfiles = [
     ["pnpm-lock.yaml", "pnpm"],
@@ -340,7 +357,7 @@ export async function detectPackageManager(targetDir = process.cwd()) {
   return null;
 }
 
-export function buildAgentsMd({ backend = null, frontend = null, pm = null } = {}) {
+export function buildAgentsMd({ backend = null, frontend = null, pm = null, rulesBlock = null } = {}) {
   const b = backend ? findPreset("backend", backend) : null;
   const f = frontend ? findPreset("frontend", frontend) : null;
   if (backend && !b) throw new Error(`Preset de backend desconhecido: ${backend}`);
@@ -396,6 +413,15 @@ export function buildAgentsMd({ backend = null, frontend = null, pm = null } = {
   for (const n of b?.never ?? []) lines.push(`- ${n}`);
   for (const n of f?.never ?? []) lines.push(`- ${n}`);
   lines.push("");
+
+  // M008: o bloco de herança da skill é gerado por src/rules.js e entra no
+  // fim do ficheiro, já com os marcadores que permitem reescrevê-lo sem tocar
+  // em mais nada. Numa AGENTS.md gerada a partir do template em branco entra
+  // igualmente, para que o ganho das regras da casa não dependa de haver preset.
+  if (rulesBlock) {
+    lines.push(rulesBlock);
+    lines.push("");
+  }
 
   return lines.join("\n");
 }

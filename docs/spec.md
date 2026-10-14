@@ -326,13 +326,50 @@ A **verificação final do plano** (build + suite completa + cobertura mínima) 
 - Dependências órfãs
 - Redundância em summaries/implementation-log (pendências acionáveis)
 
+## Regras da casa — a skill `project-rules` (M008)
+
+O `AGENTS.md` de um projeto é o **delta** (stack, comandos reais, estrutura, "nunca fazer"). O resto das regras de engenharia — tipagem estrita sem `any`, os 5 pilares de segurança, logging, git workflow, formatação, e as regras por stack — vem de uma skill global mantida fora deste repositório (`PEAL-26/peal-skills`, subpasta `project-rules/`), instalada em `<configDir>/skills/project-rules/`.
+
+**Fonte única: o repositório remoto.** A skill vem sempre do GitHub, por codeload tarball. Não existe — nem pode existir — um caminho para um checkout local: o repositório onde se desenvolvem as regras e o sítio onde correm são coisas diferentes, e o segundo tem de funcionar em qualquer máquina e em qualquer versão. A cópia canónica é a instalada em `<configDir>/skills/project-rules/`, e é essa que os agentes leem. O repo de desenvolvimento é um detalhe do autor, nunca uma dependência de runtime.
+
+**Divisão de responsabilidades** (é isto que evita duas fontes de verdade):
+
+| Dado | Dono |
+|---|---|
+| Quais regras são universais | `skills.json` do repo da skill (`alwaysOn`); por omissão `general/` |
+| Quais regras se aplicam a uma stack | campo `rules:` de cada preset em `src/presets.js` |
+| Onde está a skill e em que versão | `manifest.skills["project-rules"]` |
+| Texto do bloco de herança | gerado por `src/rules.js` a partir dos dois primeiros |
+| Conteúdo das regras | o repo da skill — nunca copiado para este repositório |
+
+Se um preset pedir um módulo que a skill publicada já não tem, esse módulo é **omitido com aviso** — nunca parte um projecto. `skills check` dá-te a lista dos que divergiram.
+
+**Instalação.** `ensure` é local-first: com o manifesto em dia e os hashes a bater certo, sai sem rede. Só quando falta ou está corrompido descarrega o tarball (`/tar.gz/<ref>`) e extrai **apenas** a subpasta da skill, para staging, e só então troca. A identidade da versão é o `sha256` do conteúdo do tarball; o `commitSha` do GitHub é best-effort. Sem dependência do binário `git` e sem dependências de runtime novas — o tar é lido por `src/tar.js`.
+
+**Degradação.** Falha de rede, 404, tarball corrompido ou estrutura inesperada produzem um aviso e `failed: true`, com a instalação anterior intacta: o loop continua sem as regras da casa. Um erro de *configuração* (URL de repo malformada, `ref` insegura) é alto, porque é um erro de uso e não de ambiente. Não ter skill instalada não é falha de `doctor` — `--no-skills` existe.
+
+**Segurança da extracção.** Só são aceites ficheiros regulares. São rejeitados: hardlink, symlink, character/block device, FIFO, nomes absolutos, letras de drive, qualquer segmento `..`, barras invertidas e entradas acima dos limites de contagem/tamanho (bombas de descompressão).
+
+**Aplicação.** O `AGENTS.md` gerado recebe um bloco entre `<!-- loop-development:rules:start -->` e `<!-- loop-development:rules:end -->`. `upsertRulesBlock` substitui o intervalo, ou faz append se os marcadores não existirem; `removeRulesBlock` apaga-o e limpa o separador. `init --project` escreve o bloco quando cria o ficheiro ou quando os marcadores já existem — num `AGENTS.md` do utilizador **sem** marcadores não toca, e aponta `rules link` como o gesto explícito.
+
+**Permissões.** A raiz da skill é lida por agentes mas vive fora do projeto, por isso o `installProject` acrescenta `external_directory` no `opencode.json` do projeto (o `read *` não a alcança). É leitura: não há grant de `edit` sobre a skill. Nenhum `.md` de agente muda de permissões.
+
+**Seleção única.** O Context Loader resolve os módulos uma vez por tarefa e reporta os paths; o Loop Development repassa-os aos subagents. Nenhum agente volta a adivinhar a selecção, e nenhum carrega o conteúdo que não precisa.
+
 ## CLI
 
 - `npx loop-development init [--project]` — instalação global e/ou preparação do projeto.
 - `npx loop-development update` — re-sincronização idempotente.
 - `npx loop-development uninstall` — remoção limpa.
 - `npx loop-development status` — estado da instalação + planos/tarefas.
-- `npx loop-development doctor [--fix] [--dir <dir>]` — diagnostica a instalação contra o OpenCode V2 (6 verificações; sai com código != 0 se algo estiver errado; `--fix` repara o automático).
+- `npx loop-development doctor [--fix] [--dir <dir>]` — diagnostica a instalação contra o OpenCode V2 (7 verificações; sai com código != 0 se algo estiver errado; `--fix` repara o automático).
+- `npx loop-development skills ensure` — garante que a skill `project-rules` existe e está íntegra (local-first, sem rede quando está em dia; falha de rede degrada em vez de partir).
+- `npx loop-development skills update` — vai buscar a `ref` mais recente do repo da skill, com backup do que existe.
+- `npx loop-development skills status|list|path|remove` — estado, módulos sempre aplicáveis, raiz instalada, remoção.
+- `npx loop-development skills check` — confere, contra a skill **instalada**, que os módulos pedidos pelos presets existem (exit 0 limpo, 1 com divergências). É a rede de segurança para uma renomeação de módulo no repo da skill; não toca na rede nem assume nenhum checkout local.
+- `npx loop-development rules link [<dir>]` — insere/reescreve o bloco "Regras da casa" no `AGENTS.md`, só dentro dos marcadores.
+- `npx loop-development rules unlink [<dir>]` — remove o bloco, preservando o resto do ficheiro.
+- `npx loop-development rules status [<dir>]` — estado da herança declarada e da skill instalada.
 - `npx loop-development models` — audita os modelos dos agentes instalados contra o catálogo models.dev.
 - `npx loop-development set-mode <simple|complete>` — define o modo default do projeto (`default_mode`), afeta apenas planos novos.
 - `npx loop-development migrate [<dir>]` — converte formato antigo para a estrutura por planos.

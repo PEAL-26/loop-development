@@ -8,9 +8,33 @@ import { uninstall } from "../src/uninstall.js";
 import { setModel } from "../src/set-model.js";
 import { loadManifest, MANIFEST_FILE } from "../src/manifest.js";
 import { findConfigFile, parseConfig, readRules } from "../src/merge-config.js";
+import { fakeFetch, makeRepoTarball } from "./helpers/tar.js";
+import { ensureSkills } from "../src/skills.js";
+import { RULES_START, hasRulesBlock } from "../src/rules.js";
+import { toPosix } from "../src/access.js";
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), "ld-install-"));
+}
+
+// Instala uma skill mínima para os testes de integração do installProject.
+async function withSkill() {
+  const configDir = tempDir();
+  await ensureSkills({
+    configDir,
+    fetchImpl: fakeFetch({
+      "codeload.github.com": {
+        body: makeRepoTarball("peal-skills-main", [
+          { name: "project-rules/SKILL.md", data: "---\nname: project-rules\n---" },
+          { name: "project-rules/references/general/security.md", data: "# 5 pilares" },
+          { name: "project-rules/references/backend/nestjs.md", data: "# nestjs" },
+          { name: "project-rules/references/backend/prisma.md", data: "# prisma" },
+        ]),
+      },
+    }),
+    log: () => {},
+  });
+  return { configDir, skillRoot: join(configDir, "skills", "project-rules") };
 }
 
 // No V2 as permissões são arrays ordenados de { action, resource, effect }, e
@@ -390,4 +414,100 @@ test("installProject com presets gera AGENTS.md preenchido", async () => {
 
 test("installProject rejeita preset desconhecido", async () => {
   await assert.rejects(() => installProject({ targetDir: tempDir(), backend: "x" }), /Preset de backend desconhecido: x/);
+});
+
+// ---------------------------------------------------------------------------
+// M008 — regras da casa
+// ---------------------------------------------------------------------------
+
+test("installProject escreve o bloco de regras e dá leitura da raiz da skill", async () => {
+  const { configDir, skillRoot } = await withSkill();
+  const dir = tempDir();
+  const result = await installProject({ targetDir: dir, backend: "nestjs-prisma", pm: "pnpm", configDir });
+
+  assert.equal(result.rules.skillInstalled, true);
+  assert.deepEqual(result.rules.missing, []);
+
+  const agents = readFileSync(join(dir, "AGENTS.md"), "utf8");
+  assert.equal(hasRulesBlock(agents), true);
+  assert.ok(agents.indexOf(RULES_START) > agents.indexOf("## Convenções"), "o delta vem primeiro, a herança depois");
+  assert.match(agents, /references\/general\/security\.md/, "os universais entram no bloco");
+  assert.match(agents, /references\/backend\/nestjs\.md/, "os módulos do preset também");
+  assert.match(agents, /Precedência/, "a precedência fica explícita");
+
+  // A skill vive FORA do projecto: sem external_directory o read não a alcança.
+  const config = parseConfig(readFileSync(join(dir, "opencode.json"), "utf8"));
+  const external = rulesOf(config).filter((r) => r.action === "external_directory");
+  assert.equal(external.length, 2);
+  assert.deepEqual(external.map((r) => r.effect), ["allow", "allow"]);
+  assert.equal(external[0].resource, toPosix(skillRoot));
+  assert.equal(external[1].resource, `${toPosix(skillRoot)}/**`);
+});
+
+test("installProject sem skill instalada escreve o bloco em modo avisado", async () => {
+  const dir = tempDir();
+  const result = await installProject({ targetDir: dir, backend: "express", pm: "npm", configDir: tempDir() });
+
+  assert.equal(result.rules.skillInstalled, false);
+  assert.deepEqual(result.rules.missing, ["backend/express-fastify"]);
+
+  const agents = readFileSync(join(dir, "AGENTS.md"), "utf8");
+  assert.equal(hasRulesBlock(agents), true, "o bloco escreve-se sempre, para o gain não depender da instalação");
+  assert.match(agents, /ainda não está instalada/);
+
+  const config = parseConfig(readFileSync(join(dir, "opencode.json"), "utf8"));
+  assert.equal(rulesOf(config).filter((r) => r.action === "external_directory").length, 0);
+});
+
+test("installProject não toca num AGENTS.md do utilizador sem marcadores", async () => {
+  const { configDir } = await withSkill();
+  const dir = tempDir();
+  const original = "# As minhas regras\n\n- código em inglês\n";
+  writeFileSync(join(dir, "AGENTS.md"), original, "utf8");
+
+  const messages = [];
+  const result = await installProject({ targetDir: dir, backend: "express", pm: "npm", configDir, log: (m) => messages.push(m) });
+
+  assert.equal(readFileSync(join(dir, "AGENTS.md"), "utf8"), original, "o ficheiro fica intacto");
+  assert.equal(result.rules.skillInstalled, true);
+  assert.ok(messages.some((m) => m.includes("rules link")), "aponta o comando explícito");
+});
+
+test("installProject reescreve só o bloco quando os marcadores já existem", async () => {
+  const { configDir } = await withSkill();
+  const dir = tempDir();
+  await installProject({ targetDir: dir, backend: "express", pm: "npm", configDir });
+  const first = readFileSync(join(dir, "AGENTS.md"), "utf8");
+
+  // Aponta a lista de módulos para um preset diferente.
+  const second = await installProject({ targetDir: dir, backend: "nestjs-prisma", pm: "npm", configDir });
+  const content = readFileSync(join(dir, "AGENTS.md"), "utf8");
+
+  assert.equal(second.rules.skillInstalled, true);
+  assert.notEqual(content, first, "o bloco foi actualizado");
+  assert.equal((content.split(RULES_START).length - 1), 1, "não duplicou o bloco");
+  assert.match(content, /references\/backend\/prisma\.md/);
+  assert.match(content, /## Convenções/);
+});
+
+test("installProject é idempotente com o bloco de regras", async () => {
+  const { configDir } = await withSkill();
+  const dir = tempDir();
+  await installProject({ targetDir: dir, backend: "express", pm: "npm", configDir });
+  const before = readFileSync(join(dir, "AGENTS.md"), "utf8");
+
+  const second = await installProject({ targetDir: dir, backend: "express", pm: "npm", configDir });
+  assert.equal(second.copied, 0);
+  assert.equal(second.existed > 0, true);
+  assert.equal(readFileSync(join(dir, "AGENTS.md"), "utf8"), before);
+  assert.equal(second.projectConfig.merged, false, "o grant de external_directory não é reinserido");
+});
+
+test("installProject usa o template em branco mas mesmo assim declara a herança", async () => {
+  const { configDir } = await withSkill();
+  const dir = tempDir();
+  await installProject({ targetDir: dir, configDir });
+  const agents = readFileSync(join(dir, "AGENTS.md"), "utf8");
+  assert.equal(hasRulesBlock(agents), true);
+  assert.match(agents, /## Convenções/, "vem do template");
 });

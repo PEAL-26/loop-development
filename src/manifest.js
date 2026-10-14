@@ -17,8 +17,24 @@ export function emptyManifest() {
     // caminho de chave, porque as permissões passaram a ser um array ordenado.
     configAdded: [],
     configConflicts: [],
-    configRemoved: []
+    configRemoved: [],
+    // Skills externas (peal-skills) instaladas por nós. Aditivo e opcional: um
+    // manifesto v2 escrito antes disto simplesmente carrega `{}`.
+    skills: {}
   };
+}
+
+// Entradas de skills malformadas são descartadas em vez de passarem adiante:
+// o resto do manifesto (ficheiros, config) é que importa para o uninstall.
+function normalizeSkills(value) {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) return {};
+  const out = {};
+  for (const [name, entry] of Object.entries(value)) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    if (!Array.isArray(entry.files)) continue;
+    out[name] = { ...entry, files: entry.files.filter((f) => typeof f?.path === "string") };
+  }
+  return out;
 }
 
 function normalizeFileEntry(entry) {
@@ -76,6 +92,7 @@ export async function loadManifest(configDir) {
         .filter(Boolean),
       configConflicts: Array.isArray(parsed.configConflicts) ? parsed.configConflicts : [],
       configRemoved: Array.isArray(parsed.configRemoved) ? parsed.configRemoved : [],
+      skills: normalizeSkills(parsed.skills),
     };
   } catch {
     return emptyManifest();

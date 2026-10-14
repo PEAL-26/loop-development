@@ -7,9 +7,27 @@ import { doctor } from "../src/doctor.js";
 import { installGlobal } from "../src/install.js";
 import { MANIFEST_FILE } from "../src/manifest.js";
 import { PACKAGE_NAME } from "../src/deps.js";
+import { fakeFetch, makeRepoTarball } from "./helpers/tar.js";
+import { ensureSkills } from "../src/skills.js";
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), "ld-doctor-"));
+}
+
+// Instala uma skill mínima através da pipeline real (fetch injectado), para que
+// o check do doctor seja exercitado contra o mesmo formato de manifesto que a
+// produção escreve — sem rede.
+async function installSkillFixture(configDir) {
+  const routes = {
+    "codeload.github.com": {
+      body: makeRepoTarball("peal-skills-main", [
+        { name: "project-rules/SKILL.md", data: "---\nname: project-rules\n---" },
+        { name: "project-rules/references/general/security.md", data: "# 5 pilares" },
+      ]),
+    },
+  };
+  await ensureSkills({ configDir, fetchImpl: fakeFetch(routes), log: () => {} });
+  return configDir;
 }
 
 // Um `opencode --version` falso no PATH, para que o check da versão não dependa
@@ -89,7 +107,7 @@ test("doctor aprova uma instalação completa e exit code 0", async () => {
 
   assert.equal(result.ok, true, `verificações com problemas: ${failedNames(result).join(", ")}`);
   assert.equal(result.failed, undefined, "sem falhas não há lista `failed`");
-  assert.equal(result.checks.length, 6, "os seis checks do plano (§4.6)");
+  assert.equal(result.checks.length, 7, "os seis checks do plano (§4.6) mais o das skills (M008)");
   for (const c of result.checks) {
     assert.equal(c.ok, true, `${c.name}: ${c.detail}`);
   }
@@ -99,6 +117,38 @@ test("doctor aprova uma instalação completa e exit code 0", async () => {
   assert.equal(checkOf(result, "Frontmatter dos agentes").detail, null);
   assert.equal(checkOf(result, "Plugins").detail, null);
   assert.equal(checkOf(result, "Dependências").detail, null);
+  // Não ter skills instaladas é legítimo (`--no-skills`), por isso passa.
+  assert.equal(checkOf(result, "Skills").ok, true);
+  assert.equal(checkOf(result, "Skills").detail, "nenhuma");
+});
+
+test("doctor reprova uma skill registada que não está íntegra", async () => {
+  const configDir = await installedDir();
+  await installSkillFixture(configDir);
+  writeFileSync(join(configDir, "skills", "project-rules", "SKILL.md"), "adulterado", "utf8");
+
+  const result = await withStubbedOpencode("2.7.3", () =>
+    doctor({ configDir, cwd: notADevCheckout(), logFile: fakeOpencodeLog([]), log: () => {} }),
+  );
+
+  const check = checkOf(result, "Skills");
+  assert.equal(check.ok, false);
+  assert.match(check.detail, /editado\(s\) localmente/);
+  assert.deepEqual(failedNames(result), ["Skills"]);
+});
+
+test("doctor aprova uma skill íntegra", async () => {
+  const configDir = await installedDir();
+  await installSkillFixture(configDir);
+
+  const result = await withStubbedOpencode("2.7.3", () =>
+    doctor({ configDir, cwd: notADevCheckout(), logFile: fakeOpencodeLog([]), log: () => {} }),
+  );
+
+  const check = checkOf(result, "Skills");
+  assert.equal(check.ok, true);
+  assert.equal(check.detail, "project-rules");
+  assert.equal(result.ok, true, `verificações com problemas: ${failedNames(result).join(", ")}`);
 });
 
 test("doctor reprova um OpenCode que ainda é v1", async () => {

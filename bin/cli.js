@@ -16,6 +16,8 @@ import { addAllowedFolder, removeAllowedFolder, listAllowedFolders, clearAllowed
 import { link, unlink } from "../src/link.js";
 import { checkSecrets, purgeSecrets } from "../src/secrets.js";
 import { setMode, isValidMode } from "../src/set-mode.js";
+import { ensureSkills, updateSkills, skillsStatus, listSkills, removeSkills, printSkillPath } from "../src/skills.js";
+import { linkRules, unlinkRules, rulesStatus, checkPresetModules } from "../src/rules.js";
 
 const USAGE = `loop-development — agente orquestrador global para o OpenCode
 
@@ -29,6 +31,28 @@ Uso:
 
   npx loop-development update [--force] [--config-dir <dir>] [--dry-run]
       Re-sincroniza a partir do pacote (idempotente).
+      Não vai à rede: garante apenas que a skill project-rules existe, se não
+      usaste --no-skills. Para a versão mais recente do repo da skill, usa
+      'skills update'.
+
+  npx loop-development skills ensure [--config-dir <dir>] [--repo <url>] [--ref <ref>] [--force] [--dry-run]
+      Garante que a skill project-rules existe e está íntegra. Local-first: com
+      o manifesto em dia sai sem rede. Falha de rede avisa e continua.
+  npx loop-development skills update [--config-dir <dir>] [--ref <ref>] [--dry-run]
+      Vai buscar a ref mais recente do repo da skill (com backup do que existe).
+  npx loop-development skills status | list | path | remove [--config-dir <dir>]
+      Estado da skill, módulos sempre aplicáveis, raiz instalada, remoção.
+  npx loop-development skills check [--config-dir <dir>]
+      Confere que os módulos pedidos pelos presets existem na skill instalada.
+      Exit code 0 se batem certo, 1 se algum ficou para trás.
+
+  npx loop-development rules link [<dir>] [--dry-run]
+      Insere (ou reescreve) o bloco "Regras da casa" no AGENTS.md do projecto.
+      Só toca no bloco entre os marcadores; o resto do ficheiro fica intacto.
+  npx loop-development rules unlink [<dir>] [--yes] [--dry-run]
+      Remove o bloco. O conteúdo escrito à mão é preservado.
+  npx loop-development rules status [<dir>]
+      Diz se o AGENTS.md declara a herança da skill e se ela está instalada.
 
   npx loop-development uninstall [--config-dir <dir>] [--yes] [--dry-run]
       Remove apenas o que foi instalado pelo loop-development.
@@ -112,11 +136,14 @@ Opções:
   --backend <id>       Preset de backend (ex.: nestjs-prisma)
   --frontend <id>      Preset de frontend (ex.: expo)
   --pm <id>            Gestor de pacotes: npm | pnpm | yarn | bun
+  --no-skills          Não instala nem garante a skill project-rules
+  --skills-repo <url>  Repo git da skill (default: peal-skills no GitHub)
+  --skills-ref <ref>   Ref/tag/sha da skill (default: main)
   --list-presets       Lista os presets disponíveis e sai
   --help, -h           Mostra esta ajuda
   --version, -v        Mostra a versão`;
 function parseFlags(args) {
-  const flags = { yes: false, force: false, dryRun: false, configDir: null, project: false, help: false, version: false, backend: null, frontend: null, pm: null, listPresets: false, token: null, pairingKey: null, reset: false, noLink: false, modelAll: null, modelDefaults: false, modelTiers: {}, history: false, tool: null, fix: false, dir: null };
+  const flags = { yes: false, force: false, dryRun: false, configDir: null, project: false, help: false, version: false, backend: null, frontend: null, pm: null, listPresets: false, token: null, pairingKey: null, reset: false, noLink: false, noSkills: false, skillsRepo: null, skillsRef: null, modelAll: null, modelDefaults: false, modelTiers: {}, history: false, tool: null, fix: false, dir: null };
   const rest = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -174,6 +201,17 @@ function parseFlags(args) {
         break;
       case "--no-link":
         flags.noLink = true;
+        break;
+      case "--no-skills":
+        flags.noSkills = true;
+        break;
+      case "--skills-repo":
+        flags.skillsRepo = args[++i];
+        if (!flags.skillsRepo) throw new Error("--skills-repo requer um valor");
+        break;
+      case "--skills-ref":
+        flags.skillsRef = args[++i];
+        if (!flags.skillsRef) throw new Error("--skills-ref requer um valor");
         break;
       case "--history":
         flags.history = true;
@@ -285,6 +323,23 @@ async function runProjectWizard({ targetDir, flags }) {
   return { backend, frontend, pm };
 }
 
+// A skill vive fora do pacote, por isso a sua instalação é um passo explícito do
+// CLI e não uma parte de installGlobal: mantém a biblioteca testável e o
+// `update` rápido quando a rede não está disponível.
+async function ensureSkillsStep(flags) {
+  if (flags.noSkills) return;
+  const result = await ensureSkills({
+    configDir: flags.configDir,
+    repo: flags.skillsRepo,
+    ref: flags.skillsRef,
+    dryRun: flags.dryRun,
+    log: console.log,
+  });
+  if (result.changed && !flags.dryRun) {
+    console.log("A skill só entra na lista do OpenCode no próximo arranque; até lá, os agentes chegam às regras pelo caminho que o AGENTS.md aponta.");
+  }
+}
+
 async function runInit(flags, rest) {
   if (flags.project) {
     const targetDir = rest[1] ?? process.cwd();
@@ -301,6 +356,10 @@ async function runInit(flags, rest) {
       return 1;
     }
 
+    // A skill é global: garantimos antes de escrever o AGENTS.md, para que o
+    // bloco de herança aponte para módulos que existem mesmo.
+    await ensureSkillsStep(flags);
+
     const wizardRan = process.stdin.isTTY === true && !flags.yes && !flags.dryRun && (flags.backend === null || flags.frontend === null);
     const { backend, frontend, pm } = await runProjectWizard({ targetDir, flags });
 
@@ -311,7 +370,7 @@ async function runInit(flags, rest) {
         return 1;
       }
     }
-    await installProject({ targetDir, force: flags.force, dryRun: flags.dryRun, log: console.log, backend, frontend, pm, noLink: flags.noLink });
+    await installProject({ targetDir, force: flags.force, dryRun: flags.dryRun, log: console.log, backend, frontend, pm, noLink: flags.noLink, configDir: flags.configDir });
     return 0;
   }
 
@@ -324,11 +383,15 @@ async function runInit(flags, rest) {
     return 1;
   }
   await installGlobal({ configDir: flags.configDir, force: flags.force, dryRun: flags.dryRun, log: console.log });
+  await ensureSkillsStep(flags);
   return 0;
 }
 
 async function runUpdate(flags) {
   await installGlobal({ configDir: flags.configDir, force: flags.force, dryRun: flags.dryRun, log: console.log });
+  // Só `ensure`: `update` continua a funcionar sem rede. Para a ref mais recente
+  // da skill, o gesto é 'loop-development skills update'.
+  await ensureSkillsStep(flags);
   return 0;
 }
 
@@ -571,6 +634,92 @@ async function runSetMode(rest, flags) {
   }
 }
 
+async function runSkills(rest, flags) {
+  const sub = rest[1];
+  try {
+    switch (sub) {
+      case "ensure":
+        await ensureSkills({
+          configDir: flags.configDir,
+          repo: flags.skillsRepo,
+          ref: flags.skillsRef,
+          force: flags.force,
+          dryRun: flags.dryRun,
+          log: console.log,
+        });
+        return 0;
+      case "update":
+        await updateSkills({
+          configDir: flags.configDir,
+          repo: flags.skillsRepo,
+          ref: flags.skillsRef,
+          dryRun: flags.dryRun,
+          log: console.log,
+        });
+        return 0;
+      case "status":
+        await skillsStatus({ configDir: flags.configDir, log: console.log });
+        return 0;
+      case "check": {
+        const result = await checkPresetModules({ configDir: flags.configDir, log: console.log });
+        return result.ok ? 0 : 1;
+      }
+      case "list":
+        await listSkills({ configDir: flags.configDir, log: console.log });
+        return 0;
+      case "path":
+        printSkillPath({ configDir: flags.configDir, log: console.log });
+        return 0;
+      case "remove": {
+        const ok = await askConfirmation("Remover a skill project-rules instalada?", { flags, dryRun: flags.dryRun });
+        if (!ok) {
+          console.log("Cancelado.");
+          return 1;
+        }
+        await removeSkills({ configDir: flags.configDir, dryRun: flags.dryRun, log: console.log });
+        return 0;
+      }
+      default:
+        console.error(`loop-development: uso: skills <ensure|update|status|check|list|path|remove>\n\n${USAGE}`);
+        return 1;
+    }
+  } catch (err) {
+    console.error(`erro: ${err.message}`);
+    return 1;
+  }
+}
+
+async function runRules(rest, flags) {
+  const sub = rest[1];
+  const targetDir = rest[2] ?? process.cwd();
+  try {
+    switch (sub) {
+      case "link": {
+        await linkRules({ projectDir: targetDir, configDir: flags.configDir, dryRun: flags.dryRun, log: console.log });
+        return 0;
+      }
+      case "unlink": {
+        const ok = await askConfirmation(`Remover o bloco de regras da casa do AGENTS.md em ${targetDir}?`, { flags, dryRun: flags.dryRun });
+        if (!ok) {
+          console.log("Cancelado.");
+          return 1;
+        }
+        await unlinkRules({ projectDir: targetDir, dryRun: flags.dryRun, log: console.log });
+        return 0;
+      }
+      case "status":
+        await rulesStatus({ projectDir: targetDir, configDir: flags.configDir, log: console.log });
+        return 0;
+      default:
+        console.error(`loop-development: uso: rules <link|unlink|status> [dir]\n\n${USAGE}`);
+        return 1;
+    }
+  } catch (err) {
+    console.error(`erro: ${err.message}`);
+    return 1;
+  }
+}
+
 async function main() {
   const args = argv.slice(2);
   if (args.length === 0) {
@@ -610,6 +759,10 @@ async function main() {
         return await runUpdate(flags);
       case "uninstall":
         return await runUninstall(flags);
+      case "skills":
+        return await runSkills(rest, flags);
+      case "rules":
+        return await runRules(rest, flags);
       case "status":
         await status({ configDir: flags.configDir });
         return 0;

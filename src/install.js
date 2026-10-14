@@ -6,7 +6,10 @@ import { createHash } from "node:crypto";
 import { resolveConfigDir } from "./config-dir.js";
 import { mergeConfigFile, computeObsoleteCleanup } from "./merge-config.js";
 import { loadManifest, saveManifest, ruleIdentity } from "./manifest.js";
-import { buildAgentsMd, findPreset } from "./presets.js";
+import { buildAgentsMd, findPreset, presetRules } from "./presets.js";
+import { buildProjectRulesBlock, upsertRulesBlock, hasRulesBlock } from "./rules.js";
+import { displayPath } from "./skills.js";
+import { toPosix } from "./access.js";
 import { PROJECT_EDIT_AGENTS, PERMISSION_KEYS, projectGrantRules } from "./constants.js";
 import { link } from "./link.js";
 
@@ -239,6 +242,7 @@ export async function installProject({
   frontend = null,
   pm = null,
   noLink = false,
+  configDir = null,
 } = {}) {
   await mkdir(targetDir, { recursive: true });
   const templatesDir = join(ASSETS_DIR, "templates");
@@ -248,20 +252,61 @@ export async function installProject({
   if (backend && !findPreset("backend", backend)) throw new Error(`Preset de backend desconhecido: ${backend}`);
   if (frontend && !findPreset("frontend", frontend)) throw new Error(`Preset de frontend desconhecido: ${frontend}`);
 
-  const agentsContent = withPresets
+  // M008: o AGENTS.md do projecto guarda o DELTA (stack, comandos, estrutura) e
+  // declara que herda o resto da skill `project-rules`. A selecção de módulos é
+  // feita aqui, uma vez, a partir dos presets — os subagents recebem os paths e
+  // não têm de Voltar a adivinhar.
+  const rules = await buildProjectRulesBlock({
+    configDir,
+    modules: presetRules(backend, frontend),
+  });
+  if (rules.missing.length > 0) {
+    log(`aviso: módulos pedidos que não existem na skill instalada: ${rules.missing.join(", ")}`);
+  }
+
+  const agentsPath = join(targetDir, "AGENTS.md");
+  const agentsExisted = existsSync(agentsPath);
+  const existingContent = agentsExisted ? await readFile(agentsPath, "utf8") : "";
+  const baseContent = withPresets
     ? buildAgentsMd({ backend, frontend, pm })
     : await readFile(join(templatesDir, "AGENTS.md.template"), "utf8");
 
-  const agentsStatus = dryRun
-    ? !force && existsSync(join(targetDir, "AGENTS.md"))
-      ? "exists"
-      : "copied"
-    : await writeFileIfNeeded(join(targetDir, "AGENTS.md"), agentsContent, force);
+  let agentsStatus;
+  let rulesChanged = false;
+  if (!agentsExisted || force) {
+    const composed = upsertRulesBlock(baseContent, rules.block).content;
+    agentsStatus = dryRun
+      ? !force && agentsExisted
+        ? "exists"
+        : "copied"
+      : await writeFileIfNeeded(agentsPath, composed, force);
+    rulesChanged = agentsStatus === "copied";
+  } else if (hasRulesBlock(existingContent)) {
+    // O bloco já é nosso: reescrevê-lo é seguro e mantém o AGENTS.md actualizado
+    // quando a stack muda ou a skill ganha módulos.
+    const merged = upsertRulesBlock(existingContent, rules.block);
+    agentsStatus = "refreshed";
+    rulesChanged = merged.action !== "unchanged";
+    if (rulesChanged && !dryRun) await writeFile(agentsPath, merged.content, "utf8");
+  } else {
+    // AGENTS.md do utilizador, sem marcadores: não tocamos. `rules link` é o
+    // gesto explícito para inserir o bloco sem destruir o resto do ficheiro.
+    agentsStatus = "exists";
+  }
+
   if (agentsStatus === "copied") {
     results.copied += 1;
     log(`criado: AGENTS.md${withPresets ? ` (presets: ${[backend, frontend].filter(Boolean).join(" + ")})` : ""}`);
+  } else if (agentsStatus === "refreshed" && rulesChanged) {
+    results.copied += 1;
+    log("AGENTS.md: bloco de regras da casa actualizado");
+  } else if (agentsStatus === "refreshed") {
+    results.existed += 1;
   } else {
     results.existed += 1;
+    if (agentsExisted) {
+      log("AGENTS.md já existe e não tem bloco de regras da casa — 'loop-development rules link' insere-o sem tocar no resto do ficheiro.");
+    }
   }
 
   for (const rel of await walk(templatesDir)) {
@@ -283,7 +328,10 @@ export async function installProject({
   // Grants de acesso ao projeto: regras aditivas de read/glob (allow) no
   // opencode.json da raiz, com as excepções .env, e edit apenas para os agentes
   // que escrevem ficheiros. Nunca sobrepõe uma regra que o utilizador já tenha.
-  const projectGrants = buildProjectGrants();
+  // M008: a raiz da skill é lida pelos agentes mas vive FORA do projecto, por
+  // isso precisa de `external_directory` — o `read *` não a alcança. Entra no
+  // mesmo merge para não gerar um segundo backup do config.
+  const projectGrants = buildProjectGrants(rules.location);
   const configMerge = await mergeConfigFile(targetDir, projectGrants, { dryRun, mode: "project" });
   if (configMerge.changed && !dryRun) {
     const configInfo =
@@ -322,6 +370,11 @@ export async function installProject({
   } else {
     log("Edita o AGENTS.md com a stack, comandos reais (testes/lint/typecheck/build) e convenções do projeto.");
   }
+  if (rules.location) {
+    log(`Regras da casa: skill project-rules em ${displayPath(rules.location)} (${rules.alwaysOn.length} universal(is) + ${rules.presetModules.length} do projecto).`);
+  } else {
+    log("Regras da casa: a skill project-rules ainda não está instalada — 'loop-development skills ensure' traz as regras universais.");
+  }
   log("Para o estado persistente ser usado, garante que .loop-development/ existe na raiz do projeto.");
   log("Na primeira invocação do loop, o Intake cria a pasta do plano da funcionalidade em .loop-development/plans/.");
 
@@ -332,6 +385,13 @@ export async function installProject({
     presets: withPresets,
     gitignore,
     projectConfig: { merged: configMerge.changed, added: configMerge.added.length, backup: configMerge.backup },
+    rules: {
+      skillInstalled: rules.location != null,
+      skillPath: rules.location,
+      alwaysOn: rules.alwaysOn,
+      modules: rules.presetModules,
+      missing: rules.missing
+    }
   };
 }
 
@@ -343,8 +403,9 @@ async function copyFileIfNeeded(src, dst, force) {
 }
 
 // Grants por agente como regras V2 ordenadas: "*" allow primeiro, excepções
-// .env depois (no V2 vale a última regra que casa).
-function buildProjectGrants() {
+// .env depois (no V2 vale a última regra que casa). `skillRoot`, quando existe,
+// acrescenta o `external_directory` que dá leitura da raiz da skill.
+function buildProjectGrants(skillRoot = null) {
   const grants = { agents: {} };
   for (const name of listAgentNames()) {
     const rules = [];
@@ -353,6 +414,13 @@ function buildProjectGrants() {
       rules.push(...projectGrantRules(action));
     }
     grants.agents[name] = { permissions: rules };
+  }
+  if (skillRoot) {
+    const root = toPosix(skillRoot);
+    grants.permissions = [
+      { action: "external_directory", resource: root, effect: "allow" },
+      { action: "external_directory", resource: `${root}/**`, effect: "allow" }
+    ];
   }
   return grants;
 }

@@ -13,10 +13,11 @@ function backupPath(file) {
 export async function uninstall({ configDir, dryRun = false, log = () => {} } = {}) {
   const dir = resolveConfigDir(configDir);
   const manifest = await loadManifest(dir);
-  const isInstalled = (manifest.files?.length ?? 0) > 0 || manifest.configFile;
+  const skills = Object.keys(manifest.skills ?? {});
+  const isInstalled = (manifest.files?.length ?? 0) > 0 || manifest.configFile || skills.length > 0;
   if (!isInstalled) {
     log(`Nada para remover: o Loop Development não está instalado em ${dir}.`);
-    return { removed: 0, configChanged: false, rulesRemoved: 0, legacySkipped: 0 };
+    return { removed: 0, configChanged: false, rulesRemoved: 0, legacySkipped: 0, skillsRemoved: 0 };
   }
 
   const toRemoveFiles = [];
@@ -63,6 +64,7 @@ export async function uninstall({ configDir, dryRun = false, log = () => {} } = 
 
   log(`Removendo de ${dir}:`);
   for (const rel of toRemoveFiles) log(`  - ${rel}`);
+  for (const name of skills) log(`  - skills/${name}/`);
   if (rulesRemoved > 0) log(`  - ${rulesRemoved} regra(s) de permissão adicionada(s)`);
   if (legacySkipped > 0) {
     log(
@@ -72,9 +74,12 @@ export async function uninstall({ configDir, dryRun = false, log = () => {} } = 
 
   if (!dryRun) {
     for (const rel of toRemoveFiles) await rm(join(dir, rel), { force: true });
+    // Só removemos as skills que o manifesto registou como nossas: uma pasta
+    // que o utilizador tenha posto à mão em skills/ fica intacta.
+    for (const name of skills) await rm(join(dir, "skills", name), { recursive: true, force: true });
     await rm(join(dir, MANIFEST_FILE), { force: true });
   }
 
   log(dryRun ? "\n(--dry-run: nada foi alterado)" : "\nLoop Development removido. Reinicia o OpenCode.");
-  return { removed: toRemoveFiles.length, configChanged, rulesRemoved, legacySkipped };
+  return { removed: toRemoveFiles.length, configChanged, rulesRemoved, legacySkipped, skillsRemoved: skills.length };
 }

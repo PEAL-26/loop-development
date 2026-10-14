@@ -10,6 +10,7 @@ import { loadManifest, fileEntry, MANIFEST_FILE } from "./manifest.js";
 import { findConfigFile, parseConfig } from "./merge-config.js";
 import { ensureDeps } from "./deps.js";
 import { PKG_ROOT, ASSETS_DIR, readPackageJson, resolveFileAction } from "./install.js";
+import { inspectSkill, SKILL_NAME } from "./skills.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -268,6 +269,32 @@ async function checkDeps({ cwd, fix, dryRun, log }) {
   return { ok: true, name: "Dependências", detail: null };
 }
 
+// 7. Skills externas (peal-skills). Não instalar é legítimo — `--no-skills`
+// existe — por isso a ausência é informativa; o que é erro é uma skill que
+// está registada e não está íntegra (ficheiros em falta ou editados).
+async function checkSkills({ configDir, log }) {
+  const current = await inspectSkill({ configDir, name: SKILL_NAME });
+  if (current.entry == null) {
+    log(`OK   Skills: nenhuma skill externa registada — 'loop-development skills ensure' instala a ${SKILL_NAME}`);
+    return { ok: true, name: "Skills", detail: "nenhuma", missing: [], modified: [] };
+  }
+  if (!current.ok) {
+    const parts = [];
+    if (current.missing.length > 0) parts.push(`${current.missing.length} em falta`);
+    if (current.modified.length > 0) parts.push(`${current.modified.length} editado(s) localmente`);
+    log(`ERRO Skills: ${SKILL_NAME} em ${current.entry.path} — ${parts.join(", ")}; corrige com 'loop-development skills update'`);
+    return {
+      ok: false,
+      name: "Skills",
+      detail: `${SKILL_NAME}: ${parts.join(", ")}`,
+      missing: current.missing,
+      modified: current.modified,
+    };
+  }
+  log(`OK   Skills: ${SKILL_NAME} ${current.entry.requestedRef}${current.entry.commitSha ? ` (${current.entry.commitSha.slice(0, 7)})` : ""} íntegra em ${current.entry.path}`);
+  return { ok: true, name: "Skills", detail: SKILL_NAME, missing: [], modified: [] };
+}
+
 // ---------------------------------------------------------------------------
 // Comando
 // ---------------------------------------------------------------------------
@@ -296,6 +323,7 @@ export async function doctor({
   checks.push(await checkFrontmatter({ configDir: dir, log }));
   checks.push(await checkPlugins({ configDir: dir, log, logFile }));
   checks.push(await checkDeps({ cwd, fix, dryRun, log }));
+  checks.push(await checkSkills({ configDir: dir, log }));
 
   const failed = checks.filter((c) => !c.ok);
 

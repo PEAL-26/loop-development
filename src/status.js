@@ -7,6 +7,7 @@ import { findConfigFile, parseConfig, getPath } from "./merge-config.js";
 import { readPackageJson } from "./install.js";
 import { countMdFiles } from "./util.js";
 import { loadAllowedFolders } from "./access.js";
+import { inspectSkill, SKILL_NAME } from "./skills.js";
 
 export async function getStatus({ configDir, projectDir = process.cwd() } = {}) {
   const dir = resolveConfigDir(configDir);
@@ -89,7 +90,9 @@ export async function getStatus({ configDir, projectDir = process.cwd() } = {}) 
     }
   }
 
-  return { configDir: dir, packageVersion: pkg.version, installedVersion: manifest.version, agents, commands, configEntries, configRemoved: manifest.configRemoved ?? [], legacyKeys, projectState, activePlanState, manifestExists: (manifest.files?.length ?? 0) > 0, allowedFolders };
+  const skill = await inspectSkill({ configDir: dir, name: SKILL_NAME });
+
+  return { configDir: dir, packageVersion: pkg.version, installedVersion: manifest.version, agents, commands, configEntries, configRemoved: manifest.configRemoved ?? [], legacyKeys, projectState, activePlanState, manifestExists: (manifest.files?.length ?? 0) > 0, allowedFolders, skill };
 }
 
 export async function status(opts) {
@@ -110,6 +113,17 @@ export async function status(opts) {
     if (removed > 0) lines.push(`Entries stale removidos: ${removed}`);
   } else {
     lines.push("Agentes instalados: nenhum (corre 'npx loop-development init')");
+  }
+  const skill = data.skill;
+  if (!skill?.entry) {
+    lines.push(`Skill ${SKILL_NAME}: não instalada (corre 'npx loop-development skills ensure')`);
+  } else {
+    const state = skill.ok
+      ? "íntegra"
+      : [skill.missing.length > 0 ? `${skill.missing.length} em falta` : null, skill.modified.length > 0 ? `${skill.modified.length} editado(s)` : null]
+          .filter(Boolean)
+          .join(", ");
+    lines.push(`Skill ${SKILL_NAME}: ${skill.entry.repo}@${skill.entry.requestedRef} — ${state} em ${skill.entry.path}`);
   }
   const planLine = (() => {
     if (!data.projectState || data.projectState === "erro de leitura") {

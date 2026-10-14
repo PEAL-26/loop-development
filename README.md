@@ -89,10 +89,17 @@ Depois **revisa o `AGENTS.md`** — é isto que dá ao Verifier e ao Test Writer
 |---|---|
 | `loop-development init` | Instala agentes/comandos globalmente (idempotente). |
 | `loop-development init --project [dir]` | Prepara um projeto (`.loop-development/` + `AGENTS.md`) — wizard de presets ou `--backend/--frontend/--pm`. |
-| `loop-development update` | Re-sincroniza a partir do pacote. |
+| `loop-development update` | Re-sincroniza a partir do pacote. Sem rede: garante apenas que a skill `project-rules` existe. |
+| `loop-development skills ensure` | Garante que a skill `project-rules` existe e está íntegra. Local-first: em dia, sai sem rede. |
+| `loop-development skills update` | Vai buscar a `ref` mais recente do repo da skill (com backup do que existe). |
+| `loop-development skills status` / `list` / `path` / `remove` | Estado da skill, módulos sempre aplicáveis, raiz instalada, remoção. |
+| `loop-development skills check` | Confere que os módulos pedidos pelos presets existem na skill instalada (exit 0 se batem certo, 1 se algum ficou para trás). |
+| `loop-development rules link [<dir>]` | Insere ou reescreve o bloco "Regras da casa" no `AGENTS.md` — só toca no bloco, o resto fica intacto. |
+| `loop-development rules unlink [<dir>]` | Remove o bloco. O conteúdo escrito à mão é preservado. |
+| `loop-development rules status [<dir>]` | Diz se o `AGENTS.md` declara a herança da skill e se ela está instalada. |
 | `loop-development uninstall` | Remove apenas o que foi instalado pelo Loop Development (usa o manifesto). |
 | `loop-development status` | Mostra o estado da instalação e do projeto atual. |
-| `loop-development doctor [--fix] [--dir <dir>]` | Diagnostica a instalação contra o OpenCode V2 (6 verificações; sai com código != 0 se algo estiver errado). |
+| `loop-development doctor [--fix] [--dir <dir>]` | Diagnostica a instalação contra o OpenCode V2 (7 verificações; sai com código != 0 se algo estiver errado). |
 | `loop-development set-model <tier> <modelo>` | Troca o modelo de todos os agentes de uma camada (sintaxe compatível). |
 | `loop-development set-model --<tier> <modelo> ...` | Troca os modelos dos tiers indicados. |
 | `loop-development set-model --all <modelo>` | Troca o modelo de todos os agentes de todos os tiers. |
@@ -115,7 +122,48 @@ Depois **revisa o `AGENTS.md`** — é isto que dá ao Verifier e ao Test Writer
 | `loop-development --list-presets` | Lista os presets de stack disponíveis. |
 | `loop-development --version` / `--help` | Versão / ajuda. |
 
-Opções comuns: `--yes` (não confirmar), `--force` (sobrescrever existentes), `--dry-run` (mostrar sem alterar), `--config-dir <dir>`. No `init --project`: `--backend <id>`, `--frontend <id>`, `--pm <npm|pnpm|yarn|bun>` (tornam o fluxo não-interativo) e `--no-link` (não correr a ligação automática main/child). No `doctor`: `--fix` (repara o que for automático) e `--dir <dir>` (diretório a usar como raiz).
+Opções comuns: `--yes` (não confirmar), `--force` (sobrescrever existentes), `--dry-run` (mostrar sem alterar), `--config-dir <dir>`. No `init --project`: `--backend <id>`, `--frontend <id>`, `--pm <npm|pnpm|yarn|bun>` (tornam o fluxo não-interativo) e `--no-link` (não correr a ligação automática main/child). No `init`/`update`: `--no-skills` (não instalar nem garantir a skill), `--skills-repo <url>` e `--skills-ref <ref>` (aplicam-se também aos `subcomandos` `skills`). No `doctor`: `--fix` (repara o que for automático) e `--dir <dir>` (diretório a usar como raiz).
+
+## Regras da casa: a skill `project-rules`
+
+O `AGENTS.md` de um projeto guarda o **delta** — stack, comandos reais, estrutura de pastas, o que nunca fazer. O resto (tipagem estrita sem `any`, os 5 pilares de segurança, convenções de logging, git workflow, formatação, e as regras específicas de cada stack) vem de uma **skill global** chamada `project-rules`, mantida em [`PEAL-26/peal-skills`](https://github.com/PEAL-26/peal-skills) e instalada em `~/.config/opencode/skills/project-rules/`.
+
+**Como é instalada.** O `init` e o `update` garantem que ela existe (`skills ensure`), e o agente primário repete esse passo no início de cada sessão. É idempotente e local-first: com o manifesto em dia, sai sem rede e sem output. Falha de rede avisa e o loop continua sem as regras — nunca parte.
+
+A transferência é um tarball do codeload do GitHub (extrai-se só a subpasta da skill, sem depender do binário `git`). O manifesto regista o `sha256` do conteúdo, a `ref` pedida e o hash de cada ficheiro, o que permite distinguir "instalado por nós" de "editado por ti" — o mesmo mecanismo que já protege os agentes.
+
+Para a versão mais recente do repo da skill:
+
+```bash
+npx loop-development skills update
+```
+
+Para usar outro repo ou fixar uma tag:
+
+```bash
+npx loop-development skills ensure --skills-repo https://github.com/PEAL-26/peal-skills --skills-ref v1.2.0
+```
+
+**Como é aplicada.** O `AGENTS.md` gerado recebe um bloco delimitado por marcadores:
+
+```markdown
+<!-- loop-development:rules:start -->
+## Regras da casa — `project-rules`
+…raiz da skill, módulos sempre aplicáveis, módulos deste projeto, precedência…
+<!-- loop-development:rules:end -->
+```
+
+Os "sempre aplicáveis" são os `references/general/*` (que o `Context Loader` carrega em qualquer tarefa que toque código); os "deste projeto" vêm do campo `rules:` de cada preset e só entram no bloco se existirem na skill instalada. Em caso de conflito, **o `AGENTS.md` do projeto prevalece sobre a skill**, e a skill sobre o conhecimento geral do modelo.
+
+**Num projeto que já tem `AGENTS.md`**, o `init --project` não lhe toca — para inserires o bloco sem perder o que escreveste à mão:
+
+```bash
+npx loop-development rules link
+```
+
+O comando substitui apenas o que está entre os marcadores, por isso é repetível e reversível (`rules unlink` remove-o).
+
+**Nota sobre a descoberta de skills:** o OpenCode carrega a lista de skills no arranque. Uma skill instalada a meio de uma sessão só aparece no `skill` tool no arranque seguinte — até lá, os agentes chegam às regras pelo `read` directo dos paths que o bloco do `AGENTS.md` dá, que é o caminho primário.
 
 ## Como usar
 

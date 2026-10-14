@@ -11,8 +11,10 @@ import {
   resolvePm,
   isValidPm,
   detectPackageManager,
-  buildAgentsMd
+  buildAgentsMd,
+  presetRules
 } from "../src/presets.js";
+import { RULES_START, RULES_END, hasRulesBlock } from "../src/rules.js";
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), "ld-presets-"));
@@ -115,4 +117,48 @@ test("PACKAGE_MANAGERS cobre npm/pnpm/yarn/bun com run correto", () => {
   assert.equal(byId.get("pnpm"), "pnpm");
   assert.equal(byId.get("yarn"), "yarn");
   assert.equal(byId.get("bun"), "bun run");
+});
+
+// ---------------------------------------------------------------------------
+// M008 — regras da casa
+// ---------------------------------------------------------------------------
+
+test("todos os presets declaram módulos de regras (M008)", () => {
+  for (const p of [...BACKEND_PRESETS, ...FRONTEND_PRESETS]) {
+    assert.ok(Array.isArray(p.rules) && p.rules.length > 0, `${p.id} precisa de pelo menos um módulo`);
+    for (const rule of p.rules) {
+      assert.equal(typeof rule, "string");
+      assert.match(rule, /^[a-z0-9-]+(\/[a-z0-9-]+)?$/i, `${p.id}: módulo mal formado "${rule}"`);
+      assert.doesNotMatch(rule, /^general$/, `${p.id}: o "general/" é sempre carregado, não se repete`);
+    }
+  }
+});
+
+test("presetRules junta backend e frontend sem duplicar", () => {
+  assert.deepEqual(presetRules("express", "next"), [
+    "backend/express-fastify",
+    "frontend/nextjs-frontend",
+    "frontend/components",
+    "frontend/forms"
+  ]);
+  assert.deepEqual(presetRules("nestjs-prisma", null), ["backend/nestjs", "backend/prisma"]);
+  assert.deepEqual(presetRules(null, "expo"), ["frontend/expo-mobile", "frontend/components", "frontend/forms"]);
+  assert.deepEqual(presetRules(), []);
+  // O mesmo preset nos dois slots nunca duplica o mesmo módulo.
+  assert.equal(new Set(presetRules("nestjs-prisma", "next")).size, presetRules("nestjs-prisma", "next").length);
+});
+
+test("buildAgentsMd sem rulesBlock não escreve o bloco de herança", () => {
+  assert.equal(hasRulesBlock(buildAgentsMd({ backend: "express", pm: "npm" })), false);
+});
+
+test("buildAgentsMd com rulesBlock escreve o bloco no fim, com marcadores", () => {
+  const md = buildAgentsMd({
+    backend: "express",
+    pm: "npm",
+    rulesBlock: `${RULES_START}\n## Regras da casa — \`project-rules\`\n${RULES_END}`
+  });
+  assert.ok(md.indexOf(RULES_START) > md.indexOf("## O que nunca fazer"), "o bloco vem depois das secções do projecto");
+  assert.ok(md.trimEnd().endsWith(RULES_END));
+  assert.match(md, /## Convenções/, "o delta do projecto continua lá");
 });

@@ -1,5 +1,5 @@
 ---
-description: Carrega automaticamente todo o contexto necessário antes de qualquer execução — AGENTS.md, README, arquitetura, estado do projeto, a especificação e o estado do plano ativo, a tarefa atual e o seu histórico, os riscos relevantes e os ficheiros de código afetados.
+description: Carrega automaticamente todo o contexto necessário antes de qualquer execução — AGENTS.md, README, arquitetura, estado do projeto, as regras da casa (skill project-rules), a especificação e o estado do plano ativo, a tarefa atual e o seu histórico, os riscos relevantes e os ficheiros de código afetados.
 mode: subagent
 model: opencode/deepseek-v4-flash-free
 # tier: mechanical
@@ -38,21 +38,26 @@ A tua função é preparar o contexto completo e fiel para o Loop Development to
    - `.loop-development/project-summary.md`.
    - `.loop-development/architecture.md`.
    - `.loop-development/risks.md` (só as entradas relevantes para a tarefa em curso).
-3. **Contexto do projeto maior:** se o `state.json` tiver um campo `parent` (este projeto é child de um main), lê também, **só leitura**, os seguintes ficheiros do main (`parent.path`):
+3. **Regras da casa (skill `project-rules`).** Se o `AGENTS.md` tiver o bloco "Regras da casa", lê a raiz da skill que ele declara e carrega os módulos que a tarefa em curso pede:
+   - os módulos "Sempre aplicáveis" (`references/general/*`) — **sempre**, em qualquer tarefa que toque código;
+   - os módulos "Este projeto" (`references/backend/*`, `references/frontend/*`, `references/fullstack/*`) — quando a tarefa toca código dessa camada;
+   - mais o módulo que corresponda ao que a tarefa vai alterar (ex.: formulários → `references/frontend/forms.md`; mutações de dados → `references/general/security.md`).
+   Carrega **só** o que a tarefa pede; o objectivo é aplicar as regras, não despejá-las todas no contexto. Se o bloco não existir ou a skill não estiver instalada, reporta isso em uma linha e segues com o `AGENTS.md` do projeto — nunca é bloqueante.
+4. **Contexto do projeto maior:** se o `state.json` tiver um campo `parent` (este projeto é child de um main), lê também, **só leitura**, os seguintes ficheiros do main (`parent.path`):
    - `parent.path/.loop-development/state.json` (para saber o estado do main).
    - `parent.path/.loop-development/architecture.md` (estrutura do projeto maior).
    - `parent.path/.loop-development/project-summary.md` (o que o projeto maior é e faz).
    Se estes ficheiros não existirem ou não forem legíveis, reporta que não existem em vez de assumir. Se o `state.json` tiver `children[]`, lista-os como subprojetos ligados (sem carregar o contexto deles).
-4. Lê o estado do plano ativo:
+5. Lê o estado do plano ativo:
    - `plans/<id>/state.json`.
    - `plans/<id>/spec.md`.
     - `plans/<id>/decisions.md`.
     - `plans/<id>/clarifications.md` (se existir).
    - `plans/<id>/implementation-log/index.md` + o shard do mês em curso + qualquer shard que contenha histórico da tarefa atual (para que se saiba exatamente onde ficámos).
    - `plans/<id>/summaries/index.md` + o resumo **mais recente** apontado por ele — como **contexto de retoma** (delta e próximo passo). Os summaries não são fonte de verdade: usam-nos apenas para saber onde a sessão anterior ficou, não para substituir o `state.json` nem os canónicos.
-5. Lê a tarefa atual: `plans/<id>/tasks/<task-id>.md`.
-6. Localiza os ficheiros de código que a tarefa afeta (procura referências no ficheiro da tarefa; se não houver, procura no spec) e lê-os.
-7. Devolve um resumo estruturado com: resumo do projeto, arquitetura vigente, estado atual (fase + tarefa), a tarefa em curso com os seus critérios de aceitação, histórico relevante, riscos relevantes, e o caminho exato de cada ficheiro afetado.
+6. Lê a tarefa atual: `plans/<id>/tasks/<task-id>.md`.
+7. Localiza os ficheiros de código que a tarefa afeta (procura referências no ficheiro da tarefa; se não houver, procura no spec) e lê-os.
+8. Devolve um resumo estruturado com: resumo do projeto, arquitetura vigente, estado atual (fase + tarefa), a tarefa em curso com os seus critérios de aceitação, histórico relevante, riscos relevantes, o caminho exato de cada ficheiro afetado, e **os paths dos módulos da skill `project-rules` que carregaste** — o Loop Development repassa-os aos subagents seguintes.
 
 ## Regras
 
