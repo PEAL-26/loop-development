@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/PEAL-26/loop-development/compare/v1.0.0...v1.1.0) (2026-10-14)
+
+
+### Features
+
+* skill `project-rules` como regra-mãe global (M008) ([8231058](https://github.com/PEAL-26/loop-development/commit/8231058d0685fce6aba4c804a2bee96f11603879))
+
 # [1.0.0](https://github.com/PEAL-26/loop-development/compare/v0.7.0...v1.0.0) (2026-10-09)
 
 
